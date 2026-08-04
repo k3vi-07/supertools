@@ -7,6 +7,7 @@ import { allTools, mergeRemoteTools } from './tools'
 import { useToolsStore } from './stores/tools'
 import { useSettingsStore } from './stores/settings'
 import { useRemoteToolsStore } from './stores/remoteTools'
+import { useUpdaterStore } from './stores/updater'
 import { i18n } from './i18n'
 import './assets/styles/global.less'
 
@@ -69,5 +70,9 @@ remoteToolsStore.init()
 // 合并已安装的远程工具
 mergeRemoteTools(remoteToolsStore.remoteToolManifests)
 toolsStore.registerTools(allTools)
+
+// 初始化自动更新
+const updaterStore = useUpdaterStore()
+updaterStore.init()
 
 app.mount('#app')

@@ -181,5 +181,27 @@ contextBridge.exposeInMainWorld('supertools', {
       throw new Error(res.error || '获取清单失败')
     }
     return res.data
+  },
+
+  // ===== 自动更新 API =====
+
+  /** 手动检查更新 */
+  checkForUpdates: async (): Promise<void> => {
+    await ipcRenderer.invoke(IPC_CHANNELS.UPDATER_CHECK)
+  },
+
+  /** 安装已下载的更新并重启 */
+  installUpdate: (): void => {
+    ipcRenderer.send(IPC_CHANNELS.UPDATER_INSTALL)
+  },
+
+  /** 获取当前版本信息 */
+  getUpdateStatus: async (): Promise<{ currentVersion: string }> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.UPDATER_GET_STATUS)
+  },
+
+  /** 监听主进程推送的更新事件 */
+  onUpdateEvent: (cb: (event: { type: string; info?: Record<string, unknown> }) => void): void => {
+    ipcRenderer.on(IPC_CHANNELS.UPDATER_EVENT, (_e, event) => cb(event))
   }
 })

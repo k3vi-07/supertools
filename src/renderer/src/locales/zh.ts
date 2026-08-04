@@ -49,6 +49,20 @@ export const zhMessages = {
     shortcut: '快捷键',
     mainShortcut: '主窗口呼出',
     searchShortcut: '快速搜索',
-    about: '关于'
+    about: '关于',
+    update: {
+      title: '检查更新',
+      currentVersion: '当前版本',
+      checkNow: '检查更新',
+      checking: '正在检查更新...',
+      available: '发现新版本',
+      upToDate: '已是最新版本',
+      downloading: '下载中',
+      downloaded: '更新已就绪',
+      installNow: '立即重启安装',
+      releaseNotes: '查看发布说明',
+      error: '检查更新失败',
+      autoCheck: '启动时自动检查更新'
+    }
   }
 }

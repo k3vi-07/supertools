@@ -49,6 +49,20 @@ export const enMessages = {
     shortcut: 'Shortcuts',
     mainShortcut: 'Toggle Main Window',
     searchShortcut: 'Quick Search',
-    about: 'About'
+    about: 'About',
+    update: {
+      title: 'Updates',
+      currentVersion: 'Current Version',
+      checkNow: 'Check for Updates',
+      checking: 'Checking for updates...',
+      available: 'New version available',
+      upToDate: 'You are using the latest version',
+      downloading: 'Downloading',
+      downloaded: 'Update ready to install',
+      installNow: 'Restart and Install',
+      releaseNotes: 'View Release Notes',
+      error: 'Update check failed',
+      autoCheck: 'Automatically check on startup'
+    }
   }
 }

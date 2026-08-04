@@ -50,6 +50,84 @@
       </div>
     </h-card-box>
 
+    <h-card-box :text="t('settings.update.title')" icon="mdi:cloud-sync-outline">
+      <div class="settings-row">
+        <span>{{ t('settings.update.currentVersion') }}</span>
+        <span class="update-version">v{{ updaterStore.currentVersion || '1.0.0' }}</span>
+      </div>
+
+      <!-- 状态展示区 -->
+      <div v-if="updaterStore.status !== 'idle'" class="update-status">
+        <!-- 检查中 -->
+        <div v-if="updaterStore.status === 'checking'" class="update-status__item update-status__item--info">
+          <h-icon icon="mdi:loading mdi-spin" :size="16" />
+          <span>{{ t('settings.update.checking') }}</span>
+        </div>
+
+        <!-- 发现新版本 -->
+        <div v-else-if="updaterStore.status === 'available'" class="update-status__item update-status__item--success">
+          <h-icon icon="mdi:cloud-download-outline" :size="16" />
+          <span>{{ t('settings.update.available') }} v{{ updaterStore.availableVersion }}</span>
+        </div>
+
+        <!-- 已是最新 -->
+        <div v-else-if="updaterStore.status === 'not-available'" class="update-status__item update-status__item--success">
+          <h-icon icon="mdi:check-circle-outline" :size="16" />
+          <span>{{ t('settings.update.upToDate') }}</span>
+        </div>
+
+        <!-- 下载中 -->
+        <div v-else-if="updaterStore.status === 'downloading'" class="update-status__item update-status__item--info">
+          <span>{{ t('settings.update.downloading') }} {{ updaterStore.progress }}%</span>
+          <div class="update-progress">
+            <div class="update-progress__bar" :style="{ width: updaterStore.progress + '%' }"></div>
+          </div>
+        </div>
+
+        <!-- 下载完成 -->
+        <div v-else-if="updaterStore.status === 'downloaded'" class="update-status__item update-status__item--success">
+          <h-icon icon="mdi:check-circle" :size="16" />
+          <span>{{ t('settings.update.downloaded') }}</span>
+        </div>
+
+        <!-- 错误 -->
+        <div v-else-if="updaterStore.status === 'error'" class="update-status__item update-status__item--error">
+          <h-icon icon="mdi:alert-circle-outline" :size="16" />
+          <span>{{ t('settings.update.error') }}: {{ updaterStore.errorMessage }}</span>
+        </div>
+      </div>
+
+      <!-- 操作按钮 -->
+      <div class="update-actions">
+        <h-button
+          v-if="updaterStore.status !== 'checking' && updaterStore.status !== 'downloading' && updaterStore.status !== 'downloaded'"
+          type="primary"
+          size="small"
+          :icon="'mdi:refresh'"
+          @click="updaterStore.checkForUpdates()"
+        >
+          {{ t('settings.update.checkNow') }}
+        </h-button>
+
+        <h-button
+          v-if="updaterStore.status === 'downloaded'"
+          type="primary"
+          size="small"
+          :icon="'mdi:restart'"
+          @click="updaterStore.installUpdate()"
+        >
+          {{ t('settings.update.installNow') }}
+        </h-button>
+
+        <a
+          class="update-link"
+          @click="openReleaseNotes"
+        >
+          {{ t('settings.update.releaseNotes') }}
+        </a>
+      </div>
+    </h-card-box>
+
     <h-card-box :text="t('settings.about')" icon="mdi:information-outline">
       <div class="about-info">
         <div class="about-info__row">
@@ -58,7 +136,7 @@
         </div>
         <div class="about-info__row">
           <span class="about-info__label">版本</span>
-          <span>1.0.0</span>
+          <span>v{{ updaterStore.currentVersion || '1.0.0' }}</span>
         </div>
         <div class="about-info__row">
           <span class="about-info__label">描述</span>
@@ -81,12 +159,19 @@
 import { useI18n } from 'vue-i18n'
 import { useSettingsStore } from '../stores/settings'
 import { useToolsStore } from '../stores/tools'
+import { useUpdaterStore } from '../stores/updater'
 
 const { t } = useI18n()
 const settingsStore = useSettingsStore()
 const toolsStore = useToolsStore()
+const updaterStore = useUpdaterStore()
 
 const isMac = navigator.platform.toUpperCase().includes('MAC')
+
+/** 打开发布说明页面 */
+function openReleaseNotes(): void {
+  window.$he3?.shellOpenExternal('https://github.com/k3vi-07/supertools/releases')
+}
 </script>
 
 <style scoped lang="less">
@@ -136,6 +221,75 @@ const isMac = navigator.platform.toUpperCase().includes('MAC')
   font-size: 12px;
   font-family: 'SF Mono', Menlo, monospace;
   color: var(--text-secondary);
+}
+
+.update-version {
+  font-family: 'SF Mono', Menlo, monospace;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.update-status {
+  padding: 8px 0;
+
+  &__item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    margin-bottom: 8px;
+
+    &--info {
+      background: rgba(99, 102, 241, 0.1);
+      color: var(--color-primary);
+    }
+
+    &--success {
+      background: rgba(34, 197, 94, 0.1);
+      color: #22c55e;
+    }
+
+    &--error {
+      background: rgba(239, 68, 68, 0.1);
+      color: #ef4444;
+    }
+  }
+}
+
+.update-progress {
+  width: 100%;
+  height: 4px;
+  background: var(--bg-base);
+  border-radius: 2px;
+  margin-top: 6px;
+  overflow: hidden;
+
+  &__bar {
+    height: 100%;
+    background: var(--color-primary);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
+}
+
+.update-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.update-link {
+  font-size: 12px;
+  color: var(--color-primary);
+  cursor: pointer;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
 }
 
 .about-info {

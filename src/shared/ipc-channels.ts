@@ -23,7 +23,15 @@ export const IPC_CHANNELS = {
   /** 远程文件获取（绕过 CORS） */
   REMOTE_FETCH: 'remote:fetch',
   /** 获取远程仓库 registry.json */
-  REMOTE_FETCH_REGISTRY: 'remote:fetch-registry'
+  REMOTE_FETCH_REGISTRY: 'remote:fetch-registry',
+  /** 手动检查更新 */
+  UPDATER_CHECK: 'updater:check',
+  /** 安装已下载的更新 */
+  UPDATER_INSTALL: 'updater:install',
+  /** 获取当前更新状态 */
+  UPDATER_GET_STATUS: 'updater:status',
+  /** 主进程 -> 渲染进程的更新事件推送 */
+  UPDATER_EVENT: 'updater:event'
 } as const
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS]
