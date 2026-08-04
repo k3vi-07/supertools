@@ -1,10 +1,14 @@
 import { app, BrowserWindow, globalShortcut, ipcMain, shell, clipboard, Tray, Menu, nativeImage, net } from 'electron'
 import { join } from 'path'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
+import { autoUpdater } from 'electron-updater'
 
 let mainWindow: BrowserWindow | null = null
 let searchWindow: BrowserWindow | null = null
 let tray: Tray | null = null
+
+/** 是否正在退出应用（用于区分关闭窗口和退出） */
+let isQuitting = false
 
 /** 当前主题（由渲染进程同步过来） */
 let currentTheme: 'dark' | 'light' = 'dark'
@@ -80,9 +84,9 @@ function createMainWindow(): BrowserWindow {
     }, 3000)
   })
 
-  // macOS 点击 dock 图标时显示窗口
+  // macOS 关闭窗口时隐藏到托盘，而非退出；真正退出时允许关闭
   mainWindow.on('close', (e) => {
-    if (isMac) {
+    if (isMac && !isQuitting) {
       e.preventDefault()
       mainWindow?.hide()
     }
@@ -230,7 +234,10 @@ function createTray(): void {
     { type: 'separator' },
     {
       label: '退出',
-      role: 'quit'
+      click: (): void => {
+        isQuitting = true
+        app.quit()
+      }
     }
   ])
 
@@ -238,6 +245,104 @@ function createTray(): void {
   tray.on('click', (): void => {
     toggleMainWindow()
   })
+}
+
+/** 配置自动更新 */
+function setupAutoUpdater(): void {
+  // 开发模式下使用 dev-app-update.yml
+  if (!app.isPackaged) {
+    autoUpdater.forceDevUpdateConfig = true
+  }
+
+  // 自动下载更新
+  autoUpdater.autoDownload = true
+  // 退出时自动安装已下载的更新
+  autoUpdater.autoInstallOnAppQuit = true
+
+  /** 向所有窗口推送更新事件 */
+  const sendUpdateEvent = (event: { type: string; info?: Record<string, unknown> }): void => {
+    const windows = BrowserWindow.getAllWindows()
+    for (const win of windows) {
+      win.webContents.send(IPC_CHANNELS.UPDATER_EVENT, event)
+    }
+  }
+
+  autoUpdater.on('checking-for-update', () => {
+    console.log('🔄 正在检查更新...')
+    sendUpdateEvent({ type: 'checking' })
+  })
+
+  autoUpdater.on('update-available', (info) => {
+    console.log('📦 发现新版本:', info.version)
+    sendUpdateEvent({
+      type: 'available',
+      info: {
+        version: info.version,
+        releaseNotes: info.releaseNotes,
+        releaseName: info.releaseName
+      }
+    })
+  })
+
+  autoUpdater.on('update-not-available', (info) => {
+    console.log('✅ 当前已是最新版本:', info.version)
+    sendUpdateEvent({ type: 'not-available' })
+  })
+
+  autoUpdater.on('download-progress', (progress) => {
+    console.log(`⬇️ 下载中: ${progress.percent.toFixed(1)}%`)
+    sendUpdateEvent({
+      type: 'progress',
+      info: {
+        percent: progress.percent,
+        transferred: progress.transferred,
+        total: progress.total
+      }
+    })
+  })
+
+  autoUpdater.on('update-downloaded', (info) => {
+    console.log('✅ 更新已下载:', info.version)
+    sendUpdateEvent({
+      type: 'downloaded',
+      info: { version: info.version }
+    })
+  })
+
+  autoUpdater.on('error', (err) => {
+    console.error('❌ 更新出错:', err.message)
+    sendUpdateEvent({
+      type: 'error',
+      info: { message: err.message }
+    })
+  })
+
+  // 手动检查更新
+  ipcMain.handle(IPC_CHANNELS.UPDATER_CHECK, async (): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      await autoUpdater.checkForUpdates()
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: (err as Error).message }
+    }
+  })
+
+  // 安装已下载的更新
+  ipcMain.on(IPC_CHANNELS.UPDATER_INSTALL, (): void => {
+    autoUpdater.quitAndInstall()
+  })
+
+  // 获取当前版本信息
+  ipcMain.handle(IPC_CHANNELS.UPDATER_GET_STATUS, (): { currentVersion: string } => {
+    return { currentVersion: app.getVersion() }
+  })
+
+  // 启动 10 秒后自动检查更新
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch((err) => {
+      console.warn('自动检查更新失败:', err.message)
+    })
+  }, 10000)
 }
 
 /** 设置 IPC 处理器 */
@@ -371,6 +476,7 @@ app.whenReady().then((): void => {
   createTray()
   registerShortcuts()
   setupIpcHandlers()
+  setupAutoUpdater()
 
   app.on('activate', (): void => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -386,6 +492,11 @@ app.on('window-all-closed', (): void => {
   if (!isMac) {
     app.quit()
   }
+})
+
+/** 应用即将退出时设置标志，让 close 事件不再阻止窗口关闭 */
+app.on('before-quit', (): void => {
+  isQuitting = true
 })
 
 /** 应用退出前注销所有快捷键 */
