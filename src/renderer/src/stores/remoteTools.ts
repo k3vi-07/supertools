@@ -42,7 +42,7 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
     try {
       const savedRepos = localStorage.getItem(REPOS_KEY)
       if (savedRepos) repos.value = JSON.parse(savedRepos)
-      const savedInstalled = localStorage.getItem(INALLED_KEY)
+      const savedInstalled = localStorage.getItem(INSTALLED_KEY)
       if (savedInstalled) installedTools.value = JSON.parse(savedInstalled)
     } catch {
       // 忽略

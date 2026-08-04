@@ -450,11 +450,10 @@ function setupIpcHandlers(): void {
         version = repo.substring(atIndex + 1)
       }
 
-      // 尝试多个分支名：用户指定 > latest > master > main
+      // 尝试多个分支名（按优先级排序，避免 jsDelivr 缓存旧数据）
+      // 用户指定 > master > main
       const branches = version ? [version] : ['master', 'main']
       const urls = branches.map((b) => `https://cdn.jsdelivr.net/gh/${owner}@${b}/registry.json`)
-      // 如果没指定版本，也尝试不带版本号（jsDelivr latest）
-      if (!version) urls.unshift(`https://cdn.jsdelivr.net/gh/${owner}/registry.json`)
 
       let lastError = ''
       for (const url of urls) {
