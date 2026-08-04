@@ -4,7 +4,7 @@
     <aside class="sidebar">
       <!-- Logo -->
       <div class="sidebar__logo" @click="router.push('/')">
-        <h-icon icon="mdi:toolbox-outline" :size="24" color="var(--color-primary)" />
+        <img src="../assets/icon.png" alt="SuperTools" class="sidebar__logo-icon" />
         <span class="sidebar__logo-text">SuperTools</span>
       </div>
 
@@ -180,6 +180,13 @@ onUnmounted(() => {
     gap: 8px;
     padding: 8px 16px 16px;
     cursor: pointer;
+  }
+
+  &__logo-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 5px;
+    flex-shrink: 0;
   }
 
   &__logo-text {

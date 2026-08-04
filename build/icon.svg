@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <!-- 背景渐变：深蓝紫 -> 深紫 -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1a1a2e"/>
+      <stop offset="100%" stop-color="#16213e"/>
+    </linearGradient>
+    <!-- >_ 符号发光效果 -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="15.36" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- 圆角方形背景 -->
+  <rect x="0" y="0" width="1024" height="1024" rx="184.32" ry="184.32" fill="url(#bg)"/>
+
+  <!-- >_ 符号 -->
+  <g filter="url(#glow)">
+    <!-- > 部分（折线） -->
+    <polyline
+      points="266.24,348.16 450.56,512 266.24,675.84"
+      fill="none"
+      stroke="#00e676"
+      stroke-width="35.84"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <!-- _ 部分（底部横线） -->
+    <line
+      x1="512" y1="696.32"
+      x2="757.76" y2="696.32"
+      stroke="#00e676"
+      stroke-width="35.84"
+      stroke-linecap="round"
+    />
+  </g>
+</svg>

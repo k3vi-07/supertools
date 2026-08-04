@@ -212,8 +212,19 @@ function registerShortcuts(): void {
 
 /** 创建系统托盘 */
 function createTray(): void {
-  // 使用一个简单的 16x16 透明图标
-  const icon = nativeImage.createEmpty()
+  // 使用应用图标作为托盘图标（缩放到 22x22 适配 macOS 菜单栏）
+  const iconPath = join(__dirname, '../../build/icon.png')
+  let icon: Electron.NativeImage
+  try {
+    icon = nativeImage.createFromPath(iconPath)
+    if (icon.isEmpty()) {
+      icon = nativeImage.createEmpty()
+    } else {
+      icon = icon.resize({ width: 22, height: 22 })
+    }
+  } catch {
+    icon = nativeImage.createEmpty()
+  }
   tray = new Tray(icon)
   tray.setToolTip('SuperTools - 开发者工具箱')
 
