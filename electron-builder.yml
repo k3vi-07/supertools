@@ -1,6 +1,5 @@
 appId: com.k3vi07.supertools
 productName: SuperTools
-author: k3vi-07
 directories:
   buildResources: build
   output: dist
@@ -11,6 +10,11 @@ files:
   - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!.github'
+  - '!.zcode'
+  - '!docs'
+  - '!dist'
+  - '!out'
 asarUnpack:
   - resources/**
 mac:
@@ -23,10 +27,23 @@ mac:
 win:
   target:
     - nsis
+  artifactName: ${productName}-${version}-Setup.${ext}
 linux:
   target:
     - AppImage
   category: Development
 nsis:
   oneClick: false
+  perMachine: false
   allowToChangeInstallationDirectory: true
+  allowElevation: true
+  installerIcon: ''
+  uninstallerIcon: ''
+  installerHeaderIcon: ''
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: SuperTools
+publish:
+  provider: github
+  owner: k3vi-07
+  repo: supertools
