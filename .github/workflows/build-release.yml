@@ -52,6 +52,7 @@ jobs:
           path: |
             dist/*.dmg
             dist/*.exe
+            dist/*.zip
             dist/*.yml
           retention-days: 30
 
@@ -61,6 +62,7 @@ jobs:
           files: |
             dist/*.dmg
             dist/*.exe
+            dist/*.zip
             dist/*.yml
           draft: false
           prerelease: false
