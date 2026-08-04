@@ -50,7 +50,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { searchTools, initSearchIndex } from '../utils/fuzzySearch'
 import { useToolsStore } from '../stores/tools'
@@ -64,7 +64,7 @@ const historyStore = useHistoryStore()
 const query = ref('')
 const inputRef = ref<HTMLInputElement>()
 const activeIndex = ref(0)
-const results = ref(searchTools('', 20))
+const results = ref<ReturnType<typeof searchTools>>([])
 
 /** 获取分类名称 */
 function getCategoryName(categoryId: string): string {
@@ -82,6 +82,9 @@ function performSearch(): void {
   activeIndex.value = 0
 }
 
+/** 监听输入变化，实时搜索 */
+watch(query, performSearch)
+
 /** 键盘导航 */
 function handleKeyDown(e: KeyboardEvent): void {
   if (e.key === 'ArrowDown') {
@@ -97,36 +100,59 @@ function handleKeyDown(e: KeyboardEvent): void {
     }
   } else if (e.key === 'Escape') {
     e.preventDefault()
-    window.supertools?.hideSearch()
+    exitSearch()
   }
 }
 
 /** 选择工具 */
 function selectTool(toolId: string): void {
   historyStore.recordUse(toolId)
-  window.supertools?.navigateToTool(toolId)
+  // 如果在主窗口内（应用内搜索模式），用 router 导航
+  const router = (window as unknown as { __router?: { push: (path: string) => void } }).__router
+  if (router) {
+    router.push(`/tool/${toolId}`)
+  } else {
+    // 搜索浮层模式，通过 IPC 导航
+    window.supertools?.navigateToTool(toolId)
+  }
+}
+
+/** 退出搜索 */
+function exitSearch(): void {
+  // 如果在主窗口内（应用内搜索模式），用 router 返回首页
+  const router = (window as unknown as { __router?: { push: (path: string) => void } }).__router
+  if (router) {
+    router.push('/')
+  } else {
+    // 搜索浮层模式，通过 IPC 隐藏
+    window.supertools?.hideSearch()
+  }
 }
 
 /** ESC 全局监听 */
 function handleGlobalKeyDown(e: KeyboardEvent): void {
   if (e.key === 'Escape') {
-    window.supertools?.hideSearch()
+    exitSearch()
   }
 }
 
 onMounted(() => {
-  // 初始化搜索索引
-  initSearchIndex(toolsStore.tools)
+  // 初始化搜索索引（确保 toolsStore 已注册工具）
+  if (toolsStore.tools.length > 0) {
+    initSearchIndex(toolsStore.tools)
+  }
 
   // 聚焦输入框
   nextTick(() => {
     inputRef.value?.focus()
   })
 
-  // 监听显示事件（重新聚焦）
+  // 监听显示事件（重新聚焦）--仅在搜索浮层模式生效
   window.supertools?.onShow(() => {
     query.value = ''
     results.value = []
+    // 重新初始化搜索索引（确保工具列表是最新的）
+    initSearchIndex(toolsStore.tools)
     nextTick(() => {
       inputRef.value?.focus()
     })
