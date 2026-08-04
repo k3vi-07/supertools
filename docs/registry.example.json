@@ -1,0 +1,30 @@
+{
+  "name": "SuperTools 社区工具仓库（示例）",
+  "description": "这是一个示例仓库，展示如何为 SuperTools 创建远程工具",
+  "tools": [
+    {
+      "id": "json-to-xml",
+      "name": "JSON to XML",
+      "nameZh": "JSON 转 XML",
+      "icon": "mdi:file-xml-box",
+      "category": ["json"],
+      "keywords": ["json", "xml", "convert", "转换"],
+      "description": "将 JSON 数据转换为 XML 格式",
+      "path": "tools/JsonToXml.vue",
+      "author": "community",
+      "version": "1.0.0"
+    },
+    {
+      "id": "text-to-speech",
+      "name": "Text to Speech",
+      "nameZh": "文本转语音",
+      "icon": "mdi:volume-high",
+      "category": ["text"],
+      "keywords": ["tts", "speech", "audio", "语音", "朗读"],
+      "description": "使用浏览器 Web Speech API 朗读文本",
+      "path": "tools/TextToSpeech.vue",
+      "author": "community",
+      "version": "1.0.0"
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "name": "supertools",
+  "version": "1.0.0",
+  "description": "SuperTools - 开发者超级工具箱，灵感来自 He3 | 136+ 内置工具 + 远程插件系统",
+  "main": "./out/main/index.js",
+  "author": "k3vi-07",
+  "license": "MIT",
+  "homepage": "https://github.com/k3vi-07/supertools",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/k3vi-07/supertools.git"
+  },
+  "bugs": {
+    "url": "https://github.com/k3vi-07/supertools/issues"
+  },
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
+    "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json --composite false",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "build:mac": "electron-vite build && electron-builder --mac",
+    "build:win": "electron-vite build && electron-builder --win",
+    "build:linux": "electron-vite build && electron-builder --linux"
+  },
+  "dependencies": {
+    "@iconify/vue": "^4.1.2",
+    "bcryptjs": "^2.4.3",
+    "crypto-js": "^4.2.0",
+    "fuse.js": "^7.0.0",
+    "jwt-decode": "^4.0.0",
+    "pinia": "^2.1.7",
+    "qrcode": "^1.5.3",
+    "uuid": "^9.0.1",
+    "vue": "^3.4.21",
+    "vue-i18n": "^9.10.2",
+    "vue-router": "^4.3.0",
+    "vue3-sfc-loader": "^0.9.5"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/crypto-js": "^4.2.2",
+    "@types/node": "^20.11.30",
+    "@types/qrcode": "^1.5.5",
+    "@types/uuid": "^9.0.8",
+    "@vitejs/plugin-vue": "^5.0.4",
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.3",
+    "electron-vite": "^2.1.0",
+    "less": "^4.2.0",
+    "typescript": "^5.4.3",
+    "vite": "^5.2.6",
+    "vue-tsc": "^2.0.7"
+  }
+}

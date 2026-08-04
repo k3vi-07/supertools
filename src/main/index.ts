@@ -1,0 +1,394 @@
+import { app, BrowserWindow, globalShortcut, ipcMain, shell, clipboard, Tray, Menu, nativeImage, net } from 'electron'
+import { join } from 'path'
+import { IPC_CHANNELS } from '@shared/ipc-channels'
+
+let mainWindow: BrowserWindow | null = null
+let searchWindow: BrowserWindow | null = null
+let tray: Tray | null = null
+
+/** 当前主题（由渲染进程同步过来） */
+let currentTheme: 'dark' | 'light' = 'dark'
+
+/** 是否 macOS */
+const isMac = process.platform === 'darwin'
+/** 是否 Windows */
+const isWin = process.platform === 'win32'
+
+/** 创建主窗口 */
+function createMainWindow(): BrowserWindow {
+  mainWindow = new BrowserWindow({
+    width: 1200,
+    height: 780,
+    minWidth: 900,
+    minHeight: 600,
+    show: false,
+    autoHideMenuBar: true,
+    titleBarStyle: isMac ? 'hiddenInset' : 'default',
+    backgroundColor: '#1a1a2e',
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false,
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  })
+
+  mainWindow.on('ready-to-show', () => {
+    mainWindow?.center()
+    mainWindow?.show()
+    mainWindow?.focus()
+    // 开发环境自动打开 DevTools
+    if (process.env['NODE_ENV'] === 'development' || process.env['ELECTRON_RENDERER_URL']) {
+      mainWindow?.webContents.openDevTools({ mode: 'detach' })
+    }
+  })
+
+  // 页面加载失败时打印错误
+  mainWindow.webContents.on('did-fail-load', (_e, errorCode, errorDescription) => {
+    console.error('❌ 页面加载失败:', errorCode, errorDescription)
+  })
+
+  // 打印渲染进程的 console 消息
+  mainWindow.webContents.on('console-message', (_e, level, message) => {
+    const prefix = level === 2 ? '⚠️' : level === 3 ? '❌' : '📝'
+    console.log(`${prefix} [Renderer] ${message}`)
+  })
+
+  // 页面加载完成后截图保存到文件
+  mainWindow.webContents.on('did-finish-load', () => {
+    console.log('✅ 页面加载完成')
+    setTimeout(() => {
+      if (mainWindow) {
+        // 检查 DOM 内容
+        mainWindow.webContents.executeJavaScript(`({
+          appHTML: document.getElementById('app') ? document.getElementById('app').innerHTML.substring(0, 500) : 'EMPTY',
+          appChildCount: document.getElementById('app') ? document.getElementById('app').childElementCount : 0,
+          bodyText: document.body ? document.body.innerText.substring(0, 200) : 'EMPTY',
+          theme: document.documentElement.getAttribute('data-theme'),
+          url: window.location.href
+        })`).then((result) => {
+          console.log('🔍 DOM 诊断:', JSON.stringify(result, null, 2))
+        }).catch((err) => console.error('DOM 检查失败:', err))
+
+        mainWindow.webContents.capturePage().then((image) => {
+          const fs = require('fs')
+          const path = require('path')
+          const screenshotPath = path.join(require('os').tmpdir(), 'supertools_capture.png')
+          fs.writeFileSync(screenshotPath, image.toPNG())
+        }).catch(() => {})
+      }
+    }, 3000)
+  })
+
+  // macOS 点击 dock 图标时显示窗口
+  mainWindow.on('close', (e) => {
+    if (isMac) {
+      e.preventDefault()
+      mainWindow?.hide()
+    }
+  })
+
+  // 开发环境加载 dev server，生产环境加载打包文件
+  if (process.env['ELECTRON_RENDERER_URL']) {
+    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+  } else {
+    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+  }
+
+  return mainWindow
+}
+
+/** 创建搜索浮层窗口（Spotlight 风格） */
+function createSearchWindow(): BrowserWindow {
+  searchWindow = new BrowserWindow({
+    width: 680,
+    height: 76,
+    frame: false,
+    resizable: false,
+    movable: false,
+    show: false,
+    skipTaskbar: true,
+    transparent: true,
+    alwaysOnTop: true,
+    hasShadow: true,
+    fullscreenable: false,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false,
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  })
+
+  // 居中显示在屏幕上方区域
+  searchWindow.on('blur', () => {
+    hideSearchWindow()
+  })
+
+  if (process.env['ELECTRON_RENDERER_URL']) {
+    searchWindow.loadURL(process.env['ELECTRON_RENDERER_URL'] + '/#/search')
+  } else {
+    searchWindow.loadFile(join(__dirname, '../renderer/index.html'), { hash: '/search' })
+  }
+
+  return searchWindow
+}
+
+/** 显示搜索浮层 */
+function showSearchWindow(): void {
+  if (!searchWindow) {
+    createSearchWindow()
+  }
+  // 获取当前活动显示器，居中靠上显示
+  const { screen } = require('electron')
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+  const { width } = display.workAreaSize
+  const x = Math.round((width - 680) / 2)
+  const y = Math.round(display.workAreaSize.height * 0.25)
+
+  if (searchWindow && !searchWindow.isVisible()) {
+    searchWindow.setPosition(x, y, false)
+    searchWindow.show()
+    searchWindow.focus()
+    searchWindow.webContents.send('search:show')
+  } else if (searchWindow) {
+    searchWindow.focus()
+    searchWindow.webContents.send('search:focus')
+  }
+}
+
+/** 隐藏搜索浮层 */
+function hideSearchWindow(): void {
+  if (searchWindow && searchWindow.isVisible()) {
+    searchWindow.hide()
+  }
+}
+
+/** 显示/隐藏主窗口 */
+function toggleMainWindow(): void {
+  if (!mainWindow) {
+    createMainWindow()
+    return
+  }
+  if (mainWindow.isVisible() && mainWindow.isFocused()) {
+    if (isMac) {
+      mainWindow.hide()
+    } else {
+      mainWindow.hide()
+    }
+  } else {
+    mainWindow.show()
+    mainWindow.focus()
+  }
+}
+
+/** 注册全局快捷键 */
+function registerShortcuts(): void {
+  // 主窗口呼出: macOS = Option+Space, Windows/Linux = Alt+Space
+  // 注意：某些系统 Space 可能被占用，提供 Alt+Shift+Space 作为备选
+  const mainAccelerator = isMac ? 'Option+Space' : 'Alt+Space'
+  const searchAccelerator = isMac ? 'Command+Shift+Space' : 'Ctrl+Shift+Space'
+
+  try {
+    globalShortcut.register(mainAccelerator, () => {
+      toggleMainWindow()
+    })
+  } catch {
+    console.warn(`Failed to register ${mainAccelerator}`)
+  }
+
+  try {
+    globalShortcut.register(searchAccelerator, () => {
+      showSearchWindow()
+    })
+  } catch {
+    console.warn(`Failed to register ${searchAccelerator}`)
+  }
+}
+
+/** 创建系统托盘 */
+function createTray(): void {
+  // 使用一个简单的 16x16 透明图标
+  const icon = nativeImage.createEmpty()
+  tray = new Tray(icon)
+  tray.setToolTip('SuperTools - 开发者工具箱')
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: '显示主窗口',
+      click: (): void => {
+        mainWindow?.show()
+        mainWindow?.focus()
+      }
+    },
+    {
+      label: '快速搜索',
+      click: (): void => {
+        showSearchWindow()
+      }
+    },
+    { type: 'separator' },
+    {
+      label: '退出',
+      role: 'quit'
+    }
+  ])
+
+  tray.setContextMenu(contextMenu)
+  tray.on('click', (): void => {
+    toggleMainWindow()
+  })
+}
+
+/** 设置 IPC 处理器 */
+function setupIpcHandlers(): void {
+  // 读取剪贴板
+  ipcMain.handle(IPC_CHANNELS.CLIPBOARD_READ, (): string => {
+    return clipboard.readText()
+  })
+
+  // 写入剪贴板
+  ipcMain.handle(IPC_CHANNELS.CLIPBOARD_WRITE, (_event, text: string): void => {
+    clipboard.writeText(text)
+  })
+
+  // 显示主窗口
+  ipcMain.on(IPC_CHANNELS.SHOW_MAIN_WINDOW, (): void => {
+    mainWindow?.show()
+    mainWindow?.focus()
+  })
+
+  // 隐藏主窗口
+  ipcMain.on(IPC_CHANNELS.HIDE_MAIN_WINDOW, (): void => {
+    if (!isMac) {
+      mainWindow?.hide()
+    }
+  })
+
+  // 显示搜索浮层
+  ipcMain.on(IPC_CHANNELS.SHOW_SEARCH_OVERLAY, (): void => {
+    showSearchWindow()
+  })
+
+  // 隐藏搜索浮层
+  ipcMain.on(IPC_CHANNELS.HIDE_SEARCH_OVERLAY, (): void => {
+    hideSearchWindow()
+  })
+
+  // 导航到工具（从搜索浮层打开工具）
+  ipcMain.on(IPC_CHANNELS.NAVIGATE_TO_TOOL, (_event, toolId: string): void => {
+    if (!mainWindow) {
+      createMainWindow()
+    }
+    mainWindow?.show()
+    mainWindow?.focus()
+    mainWindow?.webContents.send('navigate:tool', toolId)
+    hideSearchWindow()
+  })
+
+  // 用系统浏览器打开 URL
+  ipcMain.handle(IPC_CHANNELS.SHELL_OPEN_EXTERNAL, (_event, url: string): Promise<void> => {
+    return shell.openExternal(url)
+  })
+
+  // 获取平台信息
+  ipcMain.handle(IPC_CHANNELS.GET_PLATFORM_INFO, (): Record<string, unknown> => {
+    return {
+      isMacOS: isMac,
+      isWindows: isWin,
+      isLinux: !isMac && !isWin,
+      platform: process.platform,
+      versions: process.versions
+    }
+  })
+
+  // 主题变化
+  ipcMain.on(IPC_CHANNELS.THEME_CHANGED, (_event, theme: 'dark' | 'light'): void => {
+    currentTheme = theme
+  })
+
+  // 远程文件获取（绕过 CORS，通过主进程 net 模块）
+  ipcMain.handle(IPC_CHANNELS.REMOTE_FETCH, async (_event, url: string): Promise<{ ok: boolean; data?: string; error?: string; status?: number }> => {
+    try {
+      const response = await net.fetch(url)
+      if (!response.ok) {
+        return { ok: false, error: `HTTP ${response.status}`, status: response.status }
+      }
+      const data = await response.text()
+      return { ok: true, data, status: response.status }
+    } catch (err) {
+      return { ok: false, error: (err as Error).message }
+    }
+  })
+
+  // 获取远程仓库 registry.json
+  // repo 格式: 'user/repo' 或 'user/repo@version'
+  ipcMain.handle(IPC_CHANNELS.REMOTE_FETCH_REGISTRY, async (_event, repo: string): Promise<{ ok: boolean; data?: unknown; error?: string }> => {
+    try {
+      // 解析 repo 和 version
+      let owner = repo
+      let version = ''
+      const atIndex = repo.lastIndexOf('@')
+      if (atIndex > 0) {
+        owner = repo.substring(0, atIndex)
+        version = repo.substring(atIndex + 1)
+      }
+
+      // 尝试多个分支名：用户指定 > latest > master > main
+      const branches = version ? [version] : ['master', 'main']
+      const urls = branches.map((b) => `https://cdn.jsdelivr.net/gh/${owner}@${b}/registry.json`)
+      // 如果没指定版本，也尝试不带版本号（jsDelivr latest）
+      if (!version) urls.unshift(`https://cdn.jsdelivr.net/gh/${owner}/registry.json`)
+
+      let lastError = ''
+      for (const url of urls) {
+        try {
+          const response = await net.fetch(url)
+          if (response.ok) {
+            const data = await response.json()
+            return { ok: true, data }
+          }
+          lastError = `HTTP ${response.status}`
+        } catch (err) {
+          lastError = (err as Error).message
+        }
+      }
+      return { ok: false, error: `无法获取仓库清单 (${lastError})` }
+    } catch (err) {
+      return { ok: false, error: (err as Error).message }
+    }
+  })
+}
+
+/** 应用初始化 */
+app.whenReady().then((): void => {
+  // 禁用 GPU 沙盒以避免某些环境下 GPU 进程崩溃
+  app.commandLine.appendSwitch('disable-gpu-sandbox')
+  app.commandLine.appendSwitch('no-sandbox')
+
+  createMainWindow()
+  createSearchWindow()
+  createTray()
+  registerShortcuts()
+  setupIpcHandlers()
+
+  app.on('activate', (): void => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createMainWindow()
+    } else {
+      mainWindow?.show()
+    }
+  })
+})
+
+/** 所有窗口关闭时退出（macOS 除外） */
+app.on('window-all-closed', (): void => {
+  if (!isMac) {
+    app.quit()
+  }
+})
+
+/** 应用退出前注销所有快捷键 */
+app.on('will-quit', (): void => {
+  globalShortcut.unregisterAll()
+})
