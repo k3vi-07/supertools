@@ -1,5 +1,6 @@
 import { app, BrowserWindow, globalShortcut, ipcMain, shell, clipboard, Tray, Menu, nativeImage, net } from 'electron'
 import { join } from 'path'
+import { readFileSync, writeFileSync, unlinkSync, existsSync, mkdirSync, readdirSync, rmSync } from 'fs'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
 import { autoUpdater } from 'electron-updater'
 
@@ -258,6 +259,25 @@ function createTray(): void {
   })
 }
 
+/** 获取远程工具缓存目录 */
+function getCacheDir(): string {
+  const dir = join(app.getPath('userData'), 'remote-tools')
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true })
+  }
+  return dir
+}
+
+/** 将 URL 安全转换为缓存文件名 */
+function urlToCacheKey(url: string): string {
+  // https://cdn.jsdelivr.net/gh/user/repo@version/path/to/File.vue
+  // → user_repo@version_path_to_File.vue
+  return url
+    .replace(/^https?:\/\/[^/]+\/gh\//, '')
+    .replace(/[/:]/g, '_')
+    .replace(/@/g, '_at_')
+}
+
 /** 配置自动更新 */
 function setupAutoUpdater(): void {
   // 开发模式下使用 dev-app-update.yml
@@ -489,6 +509,64 @@ function setupIpcHandlers(): void {
       return { ok: false, error: `无法获取仓库清单 (${lastError})` }
     } catch (err) {
       return { ok: false, error: (err as Error).message }
+    }
+  })
+
+  // ===== 远程组件本地缓存 =====
+
+  // 读取缓存的组件源码
+  ipcMain.handle(IPC_CHANNELS.REMOTE_CACHE_READ, (_event, key: string): { ok: boolean; data?: string } => {
+    try {
+      const safeKey = urlToCacheKey(key)
+      const filePath = join(getCacheDir(), safeKey)
+      if (existsSync(filePath)) {
+        const data = readFileSync(filePath, 'utf-8')
+        return { ok: true, data }
+      }
+      return { ok: false }
+    } catch {
+      return { ok: false }
+    }
+  })
+
+  // 写入组件源码到缓存
+  ipcMain.handle(IPC_CHANNELS.REMOTE_CACHE_WRITE, (_event, key: string, content: string): { ok: boolean } => {
+    try {
+      const safeKey = urlToCacheKey(key)
+      const filePath = join(getCacheDir(), safeKey)
+      writeFileSync(filePath, content, 'utf-8')
+      return { ok: true }
+    } catch {
+      return { ok: false }
+    }
+  })
+
+  // 删除单个缓存
+  ipcMain.handle(IPC_CHANNELS.REMOTE_CACHE_DELETE, (_event, key: string): { ok: boolean } => {
+    try {
+      const safeKey = urlToCacheKey(key)
+      const filePath = join(getCacheDir(), safeKey)
+      if (existsSync(filePath)) {
+        unlinkSync(filePath)
+      }
+      return { ok: true }
+    } catch {
+      return { ok: false }
+    }
+  })
+
+  // 清空所有缓存
+  ipcMain.handle(IPC_CHANNELS.REMOTE_CACHE_CLEAR, (): { ok: boolean } => {
+    try {
+      const dir = getCacheDir()
+      if (existsSync(dir)) {
+        for (const file of readdirSync(dir)) {
+          unlinkSync(join(dir, file))
+        }
+      }
+      return { ok: true }
+    } catch {
+      return { ok: false }
     }
   })
 }
