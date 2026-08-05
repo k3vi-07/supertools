@@ -51,3 +51,4 @@ coverage/
 
 # ZCode
 .zcode/
+index.js
