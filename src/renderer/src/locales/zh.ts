@@ -22,7 +22,11 @@ export const zhMessages = {
   search: {
     placeholder: '搜索工具... (输入关键词)',
     noResult: '未找到匹配的工具',
-    hint: '输入工具名称或关键词进行搜索'
+    hint: '输入工具名称或关键词进行搜索',
+    navigate: '导航',
+    open: '打开',
+    close: '关闭',
+    results: '个结果'
   },
   category: {
     encode: '编码解码',

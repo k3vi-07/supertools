@@ -1,13 +1,16 @@
 <template>
-  <div class="app-container" :class="{ 'is-search-mode': isSearchMode }">
-    <!-- 主界面布局 -->
-    <MainLayout v-if="!isSearchMode" />
+  <div class="app-container" :class="{ 'is-overlay': isOverlayMode }">
+    <!-- 全局搜索浮层窗口模式 -->
+    <SearchView v-if="isOverlayMode" />
 
-    <!-- 搜索浮层模式 -->
-    <SearchView v-else />
+    <!-- 主界面布局 -->
+    <MainLayout v-else />
 
     <!-- 全局消息提示 -->
     <HMessageContainer />
+
+    <!-- 首次启动引导 -->
+    <OnboardingOverlay v-if="!isOverlayMode" />
   </div>
 </template>
 
@@ -17,11 +20,12 @@ import { useRoute } from 'vue-router'
 import MainLayout from './layouts/MainLayout.vue'
 import SearchView from './views/SearchView.vue'
 import HMessageContainer from './components/HMessageContainer.vue'
+import OnboardingOverlay from './components/OnboardingOverlay.vue'
 
 const route = useRoute()
 
-/** 是否搜索模式 */
-const isSearchMode = computed((): boolean => route.name === 'search')
+/** 是否为全局搜索浮层窗口模式（独立透明窗口） */
+const isOverlayMode = computed((): boolean => route.name === 'search')
 
 onMounted(() => {
   // 初始化主题
@@ -47,7 +51,7 @@ onMounted(() => {
   flex-direction: column;
   overflow: hidden;
 
-  &.is-search-mode {
+  &.is-overlay {
     background: transparent;
   }
 }

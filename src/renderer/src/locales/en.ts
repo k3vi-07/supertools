@@ -22,7 +22,11 @@ export const enMessages = {
   search: {
     placeholder: 'Search tools... (type keywords)',
     noResult: 'No matching tools found',
-    hint: 'Type a tool name or keyword to search'
+    hint: 'Type a tool name or keyword to search',
+    navigate: 'Navigate',
+    open: 'Open',
+    close: 'Close',
+    results: 'results'
   },
   category: {
     encode: 'Encode',

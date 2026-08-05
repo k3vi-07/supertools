@@ -86,7 +86,7 @@ function createMainWindow(): BrowserWindow {
 function createSearchWindow(): BrowserWindow {
   searchWindow = new BrowserWindow({
     width: 680,
-    height: 76,
+    height: 460,
     frame: false,
     resizable: false,
     movable: false,

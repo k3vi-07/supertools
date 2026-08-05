@@ -38,11 +38,37 @@
       </div>
     </div>
 
+    <!-- 无搜索结果 -->
     <div v-else-if="query && results.length === 0" class="search-overlay__empty">
       <h-icon icon="mdi:magnify-close" :size="32" color="var(--text-tertiary)" />
       <p>{{ t('search.noResult') }}</p>
     </div>
 
+    <!-- 空状态：最近使用 -->
+    <div v-else-if="recentTools.length > 0" class="search-overlay__results">
+      <div class="search-overlay__section-label">{{ t('home.recent') }}</div>
+      <div
+        v-for="(tool, index) in recentTools"
+        :key="tool.id"
+        class="search-overlay__result"
+        :class="{ active: index === activeIndex }"
+        @mouseenter="activeIndex = index"
+        @click="selectTool(tool.id)"
+      >
+        <div class="search-overlay__result-icon">
+          <h-icon :icon="tool.icon" :size="18" />
+        </div>
+        <div class="search-overlay__result-info">
+          <div class="search-overlay__result-name">{{ tool.nameZh }}</div>
+          <div class="search-overlay__result-desc">{{ tool.description }}</div>
+        </div>
+        <div class="search-overlay__result-category">
+          {{ getCategoryName(tool.category[0]) }}
+        </div>
+      </div>
+    </div>
+
+    <!-- 完全无数据 -->
     <div v-else class="search-overlay__hint">
       <p>{{ t('search.hint') }}</p>
     </div>
@@ -56,6 +82,7 @@ import { searchTools, initSearchIndex } from '../utils/fuzzySearch'
 import { useToolsStore } from '../stores/tools'
 import { useHistoryStore } from '../stores/history'
 import { CATEGORIES } from '../tools/types'
+import type { ToolManifest } from '../tools/types'
 
 const { t } = useI18n()
 const toolsStore = useToolsStore()
@@ -65,6 +92,14 @@ const query = ref('')
 const inputRef = ref<HTMLInputElement>()
 const activeIndex = ref(0)
 const results = ref<ReturnType<typeof searchTools>>([])
+
+/** 最近使用的工具列表（空状态展示） */
+const recentTools = computed((): ToolManifest[] => {
+  return historyStore.recentToolIds
+    .slice(0, 6)
+    .map((id) => toolsStore.getToolById(id))
+    .filter((tool): tool is ToolManifest => tool !== undefined)
+})
 
 /** 获取分类名称 */
 function getCategoryName(categoryId: string): string {
@@ -217,9 +252,18 @@ onUnmounted(() => {
 }
 
 .search-overlay__results {
-  max-height: 360px;
+  max-height: 380px;
   overflow-y: auto;
   padding: 8px;
+}
+
+.search-overlay__section-label {
+  padding: 6px 12px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
 }
 
 .search-overlay__result {

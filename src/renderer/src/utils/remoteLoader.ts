@@ -35,18 +35,30 @@ const moduleCache: Record<string, unknown> = {
   vue: Vue
 }
 
-// 直接覆盖 Vue.resolveComponent
+// 覆盖 Vue.resolveComponent — 让远程组件能解析全局注册的 h-xxx 组件
 // vue3-sfc-loader 编译的远程组件 render 函数中会调用 resolveComponent("h-xxx")
 // 但远程组件不继承 Vue app 的全局组件注册，导致返回 undefined → 页面空白
 // Proxy 包装 moduleCache.vue 无效（Vite 构建时 vue 已被内联到 sfc-loader）
-// 直接覆盖 Vue.resolveComponent 属性才能确保拦截生效
+// 注意：ESM 导入的属性是只读的（开发模式下），直接赋值会报 TypeError
+// 使用 Object.defineProperty 可以绕过只读限制
 const _origResolve = Vue.resolveComponent
-;(Vue as Record<string, unknown>).resolveComponent = (name: string): unknown => {
+const _patchedResolve = (name: string): unknown => {
   const resolved = _origResolve(name)
   if (resolved !== name) return resolved
   const kebab = name.toLowerCase()
   if (globalComponents[kebab]) return globalComponents[kebab]
   return name
+}
+try {
+  // 生产模式：直接赋值（Vite 内联 Vue 后属性可写）
+  ;(Vue as Record<string, unknown>).resolveComponent = _patchedResolve
+} catch {
+  // 开发模式：ESM 导入属性只读，用 defineProperty 强制覆盖
+  Object.defineProperty(Vue, 'resolveComponent', {
+    value: _patchedResolve,
+    writable: true,
+    configurable: true
+  })
 }
 
 /** 内存缓存：避免同一 session 内重复读磁盘 */

@@ -81,9 +81,6 @@ const loadError = ref(false)
 watch(
   toolId,
   async (id) => {
-    if (id) {
-      historyStore.recordUse(id)
-    }
     loadedComponent.value = null
     loadError.value = false
     if (tool.value?.component) {
@@ -115,17 +112,6 @@ function openTool(id: string): void {
   historyStore.recordUse(id)
   router.push(`/tool/${id}`)
 }
-
-// 记录使用历史
-watch(
-  toolId,
-  (id) => {
-    if (id) {
-      historyStore.recordUse(id)
-    }
-  },
-  { immediate: true }
-)
 </script>
 
 <style scoped lang="less">

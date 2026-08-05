@@ -2,6 +2,9 @@
   <div class="main-layout">
     <!-- 侧边栏 -->
     <aside class="sidebar">
+      <!-- 可拖拽标题栏区域 -->
+      <div class="sidebar__drag-region"></div>
+
       <!-- Logo -->
       <div class="sidebar__logo" @click="router.push('/')">
         <img src="../assets/icon.png" alt="SuperTools" class="sidebar__logo-icon" />
@@ -88,23 +91,31 @@
 
     <!-- 主内容区 -->
     <main class="main-content">
-      <RouterView v-slot="{ Component: comp }">
-        <Transition name="fade" mode="out-in">
-          <component :is="comp" />
-        </Transition>
-      </RouterView>
+      <!-- 可拖拽标题栏条 -->
+      <div class="main-content__drag-bar"></div>
+      <div class="main-content__body">
+        <RouterView v-slot="{ Component: comp }">
+          <Transition name="fade" mode="out-in">
+            <component :is="comp" />
+          </Transition>
+        </RouterView>
+      </div>
     </main>
+
+    <!-- 弹出式搜索 -->
+    <SearchModal v-model:visible="searchVisible" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter, RouterLink, RouterView } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useSettingsStore } from '../stores/settings'
 import { useFavoritesStore } from '../stores/favorites'
 import { useHistoryStore } from '../stores/history'
 import { useRemoteToolsStore } from '../stores/remoteTools'
+import SearchModal from '../components/SearchModal.vue'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -121,16 +132,18 @@ const shortcutHint = computed(() => {
   return isMac ? '⌘K' : 'Ctrl+K'
 })
 
+/** 弹出式搜索可见性 */
+const searchVisible = ref(false)
+
 function focusSearch(): void {
-  // 触发搜索浮层
-  router.push('/search')
+  searchVisible.value = true
 }
 
 // 全局快捷键监听（Cmd+K / Ctrl+K）
 function handleKeyDown(e: KeyboardEvent): void {
   if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
     e.preventDefault()
-    router.push('/search')
+    searchVisible.value = true
   }
 }
 
@@ -172,13 +185,19 @@ onUnmounted(() => {
   flex-direction: column;
   background: var(--bg-surface);
   border-right: 1px solid var(--border-color);
-  padding: 12px 0;
+  padding: 0 0 12px;
+
+  &__drag-region {
+    height: 28px;
+    flex-shrink: 0;
+    -webkit-app-region: drag;
+  }
 
   &__logo {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 16px 16px;
+    padding: 4px 16px 16px;
     cursor: pointer;
   }
 
@@ -323,7 +342,20 @@ onUnmounted(() => {
 
 .main-content {
   flex: 1;
-  overflow: auto;
+  overflow: hidden;
   background: var(--bg-base);
+  display: flex;
+  flex-direction: column;
+
+  &__drag-bar {
+    height: 28px;
+    flex-shrink: 0;
+    -webkit-app-region: drag;
+  }
+
+  &__body {
+    flex: 1;
+    overflow: auto;
+  }
 }
 </style>
