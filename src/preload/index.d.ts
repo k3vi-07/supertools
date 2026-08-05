@@ -27,6 +27,14 @@ interface SuperToolsAPI {
   fetchRemote(url: string): Promise<string>
   /** 获取远程仓库工具清单 */
   fetchRegistry(repo: string): Promise<unknown>
+  /** 读取本地缓存的组件源码（未命中返回 null） */
+  readCache(key: string): Promise<string | null>
+  /** 将组件源码写入本地缓存 */
+  writeCache(key: string, content: string): Promise<boolean>
+  /** 删除单个组件缓存 */
+  deleteCache(key: string): Promise<boolean>
+  /** 清空所有组件缓存 */
+  clearCache(): Promise<boolean>
   /** 手动检查更新 */
   checkForUpdates(): Promise<void>
   /** 安装已下载的更新并重启 */
