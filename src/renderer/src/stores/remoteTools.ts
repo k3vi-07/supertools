@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { RemoteToolEntry, RemoteRegistry } from '@shared/types'
 import type { ToolManifest } from '../tools/types'
-import { createRemoteComponentLoader } from '../utils/remoteLoader'
+import { createRemoteComponentLoader, precacheRemoteComponent, evictRemoteComponentCache } from '../utils/remoteLoader'
 
 const INSTALLED_KEY = 'supertools:installed-remote-tools'
 const REPOS_KEY = 'supertools:remote-repos'
@@ -160,7 +160,7 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
     }
   }
 
-  /** 安装远程工具 */
+  /** 安装远程工具（同时预下载组件到本地缓存） */
   function installTool(entry: RemoteToolEntry, repoId: string): void {
     const version = entry.version || 'master'
     if (installedIds.value.has(entry.id)) {
@@ -176,13 +176,24 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
     // 清除该工具的过期状态
     outdatedTools.value = outdatedTools.value.filter((t) => t.toolId !== entry.id)
     save()
+
+    // 异步预下载组件源码到本地缓存（不阻塞 UI）
+    precacheRemoteComponent(repoId, entry.path, version).catch(() => {
+      // 预下载失败不影响安装，后续打开工具时会自动重试
+    })
   }
 
-  /** 卸载远程工具 */
+  /** 卸载远程工具（同时清理本地缓存） */
   function uninstallTool(toolId: string): void {
+    const tool = installedTools.value.find((t) => t.id === toolId)
     installedTools.value = installedTools.value.filter((t) => t.id !== toolId)
     outdatedTools.value = outdatedTools.value.filter((t) => t.toolId !== toolId)
     save()
+
+    // 异步清理本地缓存
+    if (tool) {
+      evictRemoteComponentCache(tool.sourceRepo, tool.path, tool.installedVersion).catch(() => {})
+    }
   }
 
   /** 判断是否已安装 */
