@@ -58,5 +58,7 @@ export const CATEGORIES: CategoryInfo[] = [
   { id: 'text', name: '文本处理', nameEn: 'Text', icon: 'mdi:text' },
   { id: 'web', name: '前端开发', nameEn: 'Web', icon: 'mdi:language-html5' },
   { id: 'color', name: '颜色', nameEn: 'Color', icon: 'mdi:palette' },
-  { id: 'datetime', name: '时间日期', nameEn: 'DateTime', icon: 'mdi:clock-outline' }
+  { id: 'datetime', name: '时间日期', nameEn: 'DateTime', icon: 'mdi:clock-outline' },
+  { id: 'programming', name: '编程工具', nameEn: 'Programming', icon: 'mdi:code-braces' },
+  { id: 'network', name: '网络工具', nameEn: 'Network', icon: 'mdi:lan' }
 ]

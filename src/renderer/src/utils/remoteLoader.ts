@@ -83,13 +83,13 @@ const sfcOptions = {
  * 加载远程 Vue SFC 组件
  * @param repo GitHub 仓库，如 'user/supertools-community'
  * @param path 组件路径，如 'tools/MyTool.vue'
- * @param version 版本/分支/commit，默认 'main'
+ * @param version 版本/分支/commit，默认 'master'
  * @returns Vue 组件
  */
 export async function loadRemoteComponent(
   repo: string,
   path: string,
-  version = 'main'
+  version = 'master'
 ): Promise<Component> {
   const url = buildCdnUrl(repo, path, version)
   console.log(`[remoteLoader] 加载远程组件: ${url}`)
@@ -104,7 +104,7 @@ export async function loadRemoteComponent(
 export function createRemoteComponentLoader(
   repo: string,
   path: string,
-  version = 'main'
+  version = 'master'
 ): () => Promise<{ default: Component }> {
   return async () => {
     const component = await loadRemoteComponent(repo, path, version)

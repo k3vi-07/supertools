@@ -55,6 +55,12 @@ export interface RemoteToolEntry {
   path: string
   author?: string
   version?: string
+  /** 主页 URL */
+  homepage?: string
+  /** 开源许可证 */
+  license?: string
+  /** 仓库地址 */
+  repository?: string
 }
 
 /** 远程仓库清单 */

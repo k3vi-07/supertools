@@ -6,6 +6,7 @@ import { createRemoteComponentLoader } from '../utils/remoteLoader'
 
 const INSTALLED_KEY = 'supertools:installed-remote-tools'
 const REPOS_KEY = 'supertools:remote-repos'
+const RATINGS_KEY = 'supertools:tool-ratings'
 
 /** 已安装的远程工具（包含完整 manifest + 远程来源信息） */
 export interface InstalledRemoteTool extends RemoteToolEntry {
@@ -23,9 +24,18 @@ export interface RemoteRepo {
   id: string
   /** 显示名称 */
   name: string
-  /** 自定义别名 */
-  alias?: string
 }
+
+/** 过期工具信息（有更新可用） */
+export interface OutdatedTool {
+  toolId: string
+  installedVersion: string
+  latestVersion: string
+  entry: RemoteToolEntry
+}
+
+/** 用户评分类型 */
+export type Rating = 'like' | 'dislike'
 
 export const useRemoteToolsStore = defineStore('remoteTools', () => {
   /** 已添加的远程仓库列表 */
@@ -36,6 +46,12 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
   const loadingRegistry = ref(false)
   /** 当前仓库清单缓存 */
   const registryCache = ref<Record<string, RemoteRegistry>>({})
+  /** 用户评分（本地点赞/踩） */
+  const ratings = ref<Record<string, Rating>>({})
+  /** 过期工具列表 */
+  const outdatedTools = ref<OutdatedTool[]>([])
+  /** 是否正在检查更新 */
+  const checkingUpdates = ref(false)
 
   /** 初始化：从 localStorage 加载 */
   function init(): void {
@@ -44,6 +60,8 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
       if (savedRepos) repos.value = JSON.parse(savedRepos)
       const savedInstalled = localStorage.getItem(INSTALLED_KEY)
       if (savedInstalled) installedTools.value = JSON.parse(savedInstalled)
+      const savedRatings = localStorage.getItem(RATINGS_KEY)
+      if (savedRatings) ratings.value = JSON.parse(savedRatings)
     } catch {
       // 忽略
     }
@@ -68,10 +86,29 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
     }))
   })
 
+  /** 已安装工具数量 */
+  const installedCount = computed(() => installedTools.value.length)
+
+  /** 最近安装的工具（按时间倒序） */
+  const recentlyInstalled = computed((): InstalledRemoteTool[] => {
+    return [...installedTools.value].sort((a, b) => b.installedAt - a.installedAt)
+  })
+
+  /** 点赞数排序的热门工具 */
+  const topRatedTools = computed((): string[] => {
+    return Object.entries(ratings.value)
+      .filter(([, r]) => r === 'like')
+      .map(([id]) => id)
+  })
+
+  /** 过期工具数量 */
+  const outdatedCount = computed(() => outdatedTools.value.length)
+
   /** 保存到 localStorage */
   function save(): void {
     localStorage.setItem(REPOS_KEY, JSON.stringify(repos.value))
     localStorage.setItem(INSTALLED_KEY, JSON.stringify(installedTools.value))
+    localStorage.setItem(RATINGS_KEY, JSON.stringify(ratings.value))
   }
 
   /** 添加远程仓库 */
@@ -80,7 +117,6 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
       return false
     }
     try {
-      // 尝试获取清单以验证仓库有效
       await fetchRegistry(repoId)
       const registry = registryCache.value[repoId]
       repos.value.push({
@@ -99,12 +135,16 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
     repos.value = repos.value.filter((r) => r.id !== repoId)
     installedTools.value = installedTools.value.filter((t) => t.sourceRepo !== repoId)
     delete registryCache.value[repoId]
+    outdatedTools.value = outdatedTools.value.filter((t) => {
+      const tool = installedTools.value.find((i) => i.id === t.toolId)
+      return tool !== undefined
+    })
     save()
   }
 
   /** 获取远程仓库的工具清单 */
-  async function fetchRegistry(repoId: string): Promise<RemoteRegistry> {
-    if (registryCache.value[repoId]) {
+  async function fetchRegistry(repoId: string, force = false): Promise<RemoteRegistry> {
+    if (!force && registryCache.value[repoId]) {
       return registryCache.value[repoId]
     }
     loadingRegistry.value = true
@@ -121,7 +161,8 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
   }
 
   /** 安装远程工具 */
-  function installTool(entry: RemoteToolEntry, repoId: string, version = 'master'): void {
+  function installTool(entry: RemoteToolEntry, repoId: string): void {
+    const version = entry.version || 'master'
     if (installedIds.value.has(entry.id)) {
       // 更新已有安装
       installedTools.value = installedTools.value.filter((t) => t.id !== entry.id)
@@ -132,18 +173,180 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
       installedVersion: version,
       installedAt: Date.now()
     })
+    // 清除该工具的过期状态
+    outdatedTools.value = outdatedTools.value.filter((t) => t.toolId !== entry.id)
     save()
   }
 
   /** 卸载远程工具 */
   function uninstallTool(toolId: string): void {
     installedTools.value = installedTools.value.filter((t) => t.id !== toolId)
+    outdatedTools.value = outdatedTools.value.filter((t) => t.toolId !== toolId)
     save()
   }
 
   /** 判断是否已安装 */
   function isInstalled(toolId: string): boolean {
     return installedIds.value.has(toolId)
+  }
+
+  /** 获取已安装工具的版本 */
+  function getInstalledVersion(toolId: string): string | undefined {
+    return installedTools.value.find((t) => t.id === toolId)?.installedVersion
+  }
+
+  /** 批量安装仓库所有工具 */
+  async function installAllFromRepo(repoId: string): Promise<number> {
+    const registry = await fetchRegistry(repoId)
+    let count = 0
+    for (const entry of registry.tools) {
+      if (!installedIds.value.has(entry.id)) {
+        installTool(entry, repoId)
+        count++
+      }
+    }
+    return count
+  }
+
+  /** 批量卸载仓库所有工具 */
+  function uninstallAllFromRepo(repoId: string): number {
+    const before = installedTools.value.length
+    installedTools.value = installedTools.value.filter((t) => t.sourceRepo !== repoId)
+    const count = before - installedTools.value.length
+    save()
+    return count
+  }
+
+  /** 检查所有已安装工具的更新 */
+  async function checkUpdates(): Promise<OutdatedTool[]> {
+    checkingUpdates.value = true
+    const outdated: OutdatedTool[] = []
+    try {
+      // 按仓库分组检查
+      const repoGroups = new Map<string, InstalledRemoteTool[]>()
+      for (const tool of installedTools.value) {
+        const group = repoGroups.get(tool.sourceRepo) || []
+        group.push(tool)
+        repoGroups.set(tool.sourceRepo, group)
+      }
+
+      for (const [repoId, tools] of repoGroups) {
+        try {
+          const registry = await fetchRegistry(repoId, true)
+          const registryMap = new Map(registry.tools.map((t) => [t.id, t]))
+          for (const installed of tools) {
+            const latest = registryMap.get(installed.id)
+            if (latest) {
+              const latestVersion = latest.version || 'master'
+              if (latestVersion !== installed.installedVersion) {
+                outdated.push({
+                  toolId: installed.id,
+                  installedVersion: installed.installedVersion,
+                  latestVersion,
+                  entry: latest
+                })
+              }
+            }
+          }
+        } catch {
+          // 仓库获取失败，跳过
+        }
+      }
+      outdatedTools.value = outdated
+      return outdated
+    } finally {
+      checkingUpdates.value = false
+    }
+  }
+
+  /** 更新单个工具到最新版本 */
+  function updateTool(toolId: string): void {
+    const outdated = outdatedTools.value.find((t) => t.toolId === toolId)
+    if (!outdated) return
+    installTool(outdated.entry, outdated.entry.path ? guessRepoFromEntry(outdated.entry) : '')
+  }
+
+  /** 更新所有过期工具 */
+  function updateAll(): number {
+    let count = 0
+    for (const outdated of outdatedTools.value) {
+      const installed = installedTools.value.find((t) => t.id === outdated.toolId)
+      if (installed) {
+        installTool(outdated.entry, installed.sourceRepo)
+        count++
+      }
+    }
+    outdatedTools.value = []
+    return count
+  }
+
+  /** 从 entry 的 path 猜测仓库（辅助函数，不常用） */
+  function guessRepoFromEntry(_entry: RemoteToolEntry): string {
+    return ''
+  }
+
+  /** 判断工具是否有更新 */
+  function isOutdated(toolId: string): boolean {
+    return outdatedTools.value.some((t) => t.toolId === toolId)
+  }
+
+  /** 设置评分 */
+  function setRating(toolId: string, rating: Rating): void {
+    // 切换：再次点击相同评分则取消
+    if (ratings.value[toolId] === rating) {
+      delete ratings.value[toolId]
+    } else {
+      ratings.value[toolId] = rating
+    }
+    save()
+  }
+
+  /** 获取评分 */
+  function getRating(toolId: string): Rating | undefined {
+    return ratings.value[toolId]
+  }
+
+  /** 导出已安装工具列表 */
+  function exportInstalled(): string {
+    return JSON.stringify({
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      tools: installedTools.value.map((t) => ({
+        id: t.id,
+        name: t.name,
+        sourceRepo: t.sourceRepo,
+        installedVersion: t.installedVersion
+      }))
+    }, null, 2)
+  }
+
+  /** 导入工具列表（需要仓库已添加） */
+  async function importInstalled(json: string): Promise<{ success: number; failed: number }> {
+    let success = 0
+    let failed = 0
+    try {
+      const data = JSON.parse(json)
+      if (!data.tools || !Array.isArray(data.tools)) {
+        return { success: 0, failed: 0 }
+      }
+      for (const item of data.tools) {
+        try {
+          const registry = await fetchRegistry(item.sourceRepo)
+          const entry = registry.tools.find((t) => t.id === item.id)
+          if (entry) {
+            installTool(entry, item.sourceRepo)
+            success++
+          } else {
+            failed++
+          }
+        } catch {
+          failed++
+        }
+      }
+    } catch {
+      // JSON 解析失败
+    }
+    return { success, failed }
   }
 
   /** 获取所有已添加仓库的工具列表（用于商店展示） */
@@ -167,6 +370,13 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
     remoteToolManifests,
     loadingRegistry,
     registryCache,
+    ratings,
+    outdatedTools,
+    checkingUpdates,
+    installedCount,
+    recentlyInstalled,
+    topRatedTools,
+    outdatedCount,
     init,
     addRepo,
     removeRepo,
@@ -174,6 +384,17 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
     installTool,
     uninstallTool,
     isInstalled,
+    getInstalledVersion,
+    installAllFromRepo,
+    uninstallAllFromRepo,
+    checkUpdates,
+    updateTool,
+    updateAll,
+    isOutdated,
+    setRating,
+    getRating,
+    exportInstalled,
+    importInstalled,
     getAllStoreTools
   }
 })
