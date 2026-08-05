@@ -59,30 +59,9 @@ function createMainWindow(): BrowserWindow {
     console.log(`${prefix} [Renderer] ${message}`)
   })
 
-  // 页面加载完成后截图保存到文件
+  // 页面加载完成后打印确认
   mainWindow.webContents.on('did-finish-load', () => {
     console.log('✅ 页面加载完成')
-    setTimeout(() => {
-      if (mainWindow) {
-        // 检查 DOM 内容
-        mainWindow.webContents.executeJavaScript(`({
-          appHTML: document.getElementById('app') ? document.getElementById('app').innerHTML.substring(0, 500) : 'EMPTY',
-          appChildCount: document.getElementById('app') ? document.getElementById('app').childElementCount : 0,
-          bodyText: document.body ? document.body.innerText.substring(0, 200) : 'EMPTY',
-          theme: document.documentElement.getAttribute('data-theme'),
-          url: window.location.href
-        })`).then((result) => {
-          console.log('🔍 DOM 诊断:', JSON.stringify(result, null, 2))
-        }).catch((err) => console.error('DOM 检查失败:', err))
-
-        mainWindow.webContents.capturePage().then((image) => {
-          const fs = require('fs')
-          const path = require('path')
-          const screenshotPath = path.join(require('os').tmpdir(), 'supertools_capture.png')
-          fs.writeFileSync(screenshotPath, image.toPNG())
-        }).catch(() => {})
-      }
-    }, 3000)
   })
 
   // macOS 关闭窗口时隐藏到托盘，而非退出；真正退出时允许关闭

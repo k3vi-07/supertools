@@ -12,6 +12,7 @@
 import { loadModule } from 'vue3-sfc-loader'
 import * as Vue from 'vue'
 import type { Component } from 'vue'
+import { globalComponents } from '../components/register'
 
 /** jsDelivr CDN 基础 URL */
 const JSDELIVR_BASE = 'https://cdn.jsdelivr.net/gh'
@@ -32,6 +33,20 @@ export function buildCdnUrl(repo: string, path: string, version = 'master'): str
 /** Vue 运行时模块缓存（sfc-loader 需要） */
 const moduleCache: Record<string, unknown> = {
   vue: Vue
+}
+
+// 直接覆盖 Vue.resolveComponent
+// vue3-sfc-loader 编译的远程组件 render 函数中会调用 resolveComponent("h-xxx")
+// 但远程组件不继承 Vue app 的全局组件注册，导致返回 undefined → 页面空白
+// Proxy 包装 moduleCache.vue 无效（Vite 构建时 vue 已被内联到 sfc-loader）
+// 直接覆盖 Vue.resolveComponent 属性才能确保拦截生效
+const _origResolve = Vue.resolveComponent
+;(Vue as Record<string, unknown>).resolveComponent = (name: string): unknown => {
+  const resolved = _origResolve(name)
+  if (resolved !== name) return resolved
+  const kebab = name.toLowerCase()
+  if (globalComponents[kebab]) return globalComponents[kebab]
+  return name
 }
 
 /** 内存缓存：避免同一 session 内重复读磁盘 */
@@ -221,19 +236,28 @@ export async function loadRemoteComponent(
     const url = buildCdnUrl(repo, path, ver)
     console.log(`[remoteLoader] 尝试加载: ${url}`)
 
-    // 预检 URL 是否可访问（含缓存检查）
-    const accessible = await checkUrlAccessible(url)
-    if (!accessible) {
-      console.warn(`[remoteLoader] 版本 ${ver} 不可访问，尝试下一个`)
-      continue
-    }
-
     try {
       const module = await loadModule(url, sfcOptions)
+      const rawComponent = module as unknown as Record<string, unknown>
+      const componentDef = (rawComponent.default || rawComponent) as Record<string, unknown>
+
+      // 注入全局组件到组件定义
+      if (componentDef && typeof componentDef === 'object') {
+        componentDef.components = {
+          ...(componentDef.components as Record<string, unknown>),
+          ...globalComponents
+        }
+      }
+
       console.log(`[remoteLoader] 加载成功: ${ver}`)
-      return module as unknown as Component
+      return componentDef as unknown as Component
     } catch (err) {
-      console.warn(`[remoteLoader] 版本 ${ver} 编译失败，尝试下一个`)
+      console.warn(`[remoteLoader] 版本 ${ver} 加载失败:`, (err as Error).message?.substring(0, 100))
+      // 清除这个版本可能的坏缓存，避免下次还用坏数据
+      memoryCache.delete(url)
+      if (typeof window !== 'undefined' && window.supertools?.deleteCache) {
+        window.supertools.deleteCache(url).catch(() => {})
+      }
       lastError = err
     }
   }
@@ -242,7 +266,9 @@ export async function loadRemoteComponent(
 
 /**
  * 创建懒加载的远程组件函数
- * 符合 ToolManifest.component 的签名 () => Promise<{ default: Component }>
+ * defineAsyncComponent 会对返回值检查 __esModule，
+ * 如果为 true 则取 .default，否则直接用返回值作为组件。
+ * 我们直接返回组件对象（不包装），避免 defineAsyncComponent 的歧义。
  */
 export function createRemoteComponentLoader(
   repo: string,

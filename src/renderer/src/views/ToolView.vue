@@ -23,17 +23,15 @@
 
     <!-- 工具内容 -->
     <div class="tool-view__content">
-      <Suspense>
-        <template #default>
-          <component :is="toolComponent" />
-        </template>
-        <template #fallback>
-          <div class="tool-view__loading">
-            <h-icon icon="mdi:loading" :size="32" color="var(--color-primary)" />
-            <span>加载中...</span>
-          </div>
-        </template>
-      </Suspense>
+      <div v-if="loadError" class="tool-view__loading">
+        <h-icon icon="mdi:alert-circle-outline" :size="32" color="var(--color-error)" />
+        <span>加载失败</span>
+      </div>
+      <div v-else-if="!toolComponent" class="tool-view__loading">
+        <h-icon icon="mdi:loading" :size="32" color="var(--color-primary)" />
+        <span>加载中...</span>
+      </div>
+      <component v-else :is="toolComponent" :key="toolId" />
     </div>
 
     <!-- 相关工具 -->
@@ -58,7 +56,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, watch } from 'vue'
+import { computed, ref, watch, defineComponent, shallowRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useToolsStore } from '../stores/tools'
@@ -76,10 +74,34 @@ const toolId = computed(() => route.params.id as string)
 
 const tool = computed(() => toolsStore.getToolById(toolId.value))
 
-const toolComponent = computed(() => {
-  if (!tool.value) return null
-  return defineAsyncComponent(tool.value.component)
-})
+// 手动管理异步组件加载，避免 defineAsyncComponent 的 __esModule 歧义
+const loadedComponent = shallowRef<ReturnType<typeof defineComponent> | null>(null)
+const loadError = ref(false)
+
+watch(
+  toolId,
+  async (id) => {
+    if (id) {
+      historyStore.recordUse(id)
+    }
+    loadedComponent.value = null
+    loadError.value = false
+    if (tool.value?.component) {
+      try {
+        const result = await tool.value.component()
+        // result 可能是 { default: Component } 或 Component 本身
+        const comp = (result as { default?: unknown }).default || result
+        loadedComponent.value = comp as ReturnType<typeof defineComponent>
+      } catch (err) {
+        console.error('[ToolView] 组件加载失败:', err)
+        loadError.value = true
+      }
+    }
+  },
+  { immediate: true }
+)
+
+const toolComponent = computed(() => loadedComponent.value)
 
 const isFav = computed(() => favoritesStore.isFavorite(toolId.value))
 

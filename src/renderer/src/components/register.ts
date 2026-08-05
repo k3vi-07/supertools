@@ -18,23 +18,30 @@ import HMessageContainer from './HMessageContainer.vue'
 import HCardBox from './HCardBox.vue'
 import HKeyValueInput from './HKeyValueInput.vue'
 
+/** 全局组件映射（供远程组件 sfc-loader 使用） */
+export const globalComponents: Record<string, unknown> = {
+  'h-transform': HTransform,
+  'h-text-transform': HTextTransform,
+  'h-single-layout': HSingleLayout,
+  'h-horizontal-layout': HHorizontalLayout,
+  'h-input': HInput,
+  'h-multiline-input': HMultilineInput,
+  'h-code-editor': HCodeEditor,
+  'h-button': HButton,
+  'h-text-copy': HTextCopyButton,
+  'h-radio': HRadio,
+  'h-select': HSelect,
+  'h-icon': HIcon,
+  'h-checkbox': HCheckbox,
+  'h-switch': HSwitch,
+  'h-number-input': HNumberInput,
+  'h-card-box': HCardBox,
+  'h-kv-input': HKeyValueInput
+}
+
 /** 注册所有 h- 前缀的全局组件 */
 export function registerComponents(app: App): void {
-  app.component('h-transform', HTransform)
-  app.component('h-text-transform', HTextTransform)
-  app.component('h-single-layout', HSingleLayout)
-  app.component('h-horizontal-layout', HHorizontalLayout)
-  app.component('h-input', HInput)
-  app.component('h-multiline-input', HMultilineInput)
-  app.component('h-code-editor', HCodeEditor)
-  app.component('h-button', HButton)
-  app.component('h-text-copy', HTextCopyButton)
-  app.component('h-radio', HRadio)
-  app.component('h-select', HSelect)
-  app.component('h-icon', HIcon)
-  app.component('h-checkbox', HCheckbox)
-  app.component('h-switch', HSwitch)
-  app.component('h-number-input', HNumberInput)
-  app.component('h-card-box', HCardBox)
-  app.component('h-kv-input', HKeyValueInput)
+  for (const [name, component] of Object.entries(globalComponents)) {
+    app.component(name, component as never)
+  }
 }
