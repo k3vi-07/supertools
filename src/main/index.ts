@@ -450,23 +450,41 @@ function setupIpcHandlers(): void {
         version = repo.substring(atIndex + 1)
       }
 
-      // 尝试多个分支名（按优先级排序，避免 jsDelivr 缓存旧数据）
-      // 用户指定 > master > main
       const branches = version ? [version] : ['master', 'main']
-      const urls = branches.map((b) => `https://cdn.jsdelivr.net/gh/${owner}@${b}/registry.json`)
 
+      // 策略：优先用 GitHub Raw API（无 CDN 缓存问题，始终最新）
+      // 回退到 jsDelivr CDN（加速国内访问，但可能缓存旧数据）
+      // 先 GitHub Raw 再 jsDelivr，但选工具数最多的那个
+      const sources: string[] = []
+      for (const b of branches) {
+        sources.push(`https://raw.githubusercontent.com/${owner}/${b}/registry.json`)
+        sources.push(`https://cdn.jsdelivr.net/gh/${owner}@${b}/registry.json`)
+      }
+
+      let bestData: { tools: unknown[] } | null = null
+      let bestCount = 0
       let lastError = ''
-      for (const url of urls) {
+
+      for (const url of sources) {
         try {
           const response = await net.fetch(url)
           if (response.ok) {
-            const data = await response.json()
-            return { ok: true, data }
+            const data = await response.json() as { tools?: unknown[] }
+            const count = Array.isArray(data?.tools) ? data.tools.length : 0
+            // 取工具数最多的结果（避免 CDN 缓存旧版本）
+            if (count > bestCount) {
+              bestCount = count
+              bestData = data as { tools: unknown[] }
+            }
           }
-          lastError = `HTTP ${response.status}`
+          lastError = lastError || `HTTP ${response.status}`
         } catch (err) {
-          lastError = (err as Error).message
+          lastError = lastError || (err as Error).message
         }
+      }
+
+      if (bestData) {
+        return { ok: true, data: bestData }
       }
       return { ok: false, error: `无法获取仓库清单 (${lastError})` }
     } catch (err) {
