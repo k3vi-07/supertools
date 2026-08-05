@@ -80,6 +80,21 @@ const sfcOptions = {
 }
 
 /**
+ * 检查 URL 是否可访问（HEAD 预检）
+ */
+async function checkUrlAccessible(url: string): Promise<boolean> {
+  try {
+    if (typeof window !== 'undefined' && window.supertools?.fetchRemote) {
+      await window.supertools.fetchRemote(url)
+      return true
+    }
+  } catch {
+    return false
+  }
+  return false
+}
+
+/**
  * 加载远程 Vue SFC 组件
  * @param repo GitHub 仓库，如 'user/supertools-community'
  * @param path 组件路径，如 'tools/MyTool.vue'
@@ -91,10 +106,31 @@ export async function loadRemoteComponent(
   path: string,
   version = 'master'
 ): Promise<Component> {
-  const url = buildCdnUrl(repo, path, version)
-  console.log(`[remoteLoader] 加载远程组件: ${url}`)
-  const module = await loadModule(url, sfcOptions)
-  return module as unknown as Component
+  // 尝试顺序：指定版本 → master → main（处理 git tag/分支不存在的情况）
+  const versions = [version, 'master', 'main'].filter((v, i, a) => a.indexOf(v) === i)
+  let lastError: unknown = null
+
+  for (const ver of versions) {
+    const url = buildCdnUrl(repo, path, ver)
+    console.log(`[remoteLoader] 尝试加载: ${url}`)
+
+    // 预检 URL 是否可访问，避免 loadModule 吞掉 404 错误
+    const accessible = await checkUrlAccessible(url)
+    if (!accessible) {
+      console.warn(`[remoteLoader] 版本 ${ver} 不可访问 (404)，尝试下一个`)
+      continue
+    }
+
+    try {
+      const module = await loadModule(url, sfcOptions)
+      console.log(`[remoteLoader] 加载成功: ${ver}`)
+      return module as unknown as Component
+    } catch (err) {
+      console.warn(`[remoteLoader] 版本 ${ver} 编译失败，尝试下一个`)
+      lastError = err
+    }
+  }
+  throw lastError || new Error('所有版本均加载失败')
 }
 
 /**
