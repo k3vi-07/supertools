@@ -183,6 +183,33 @@ contextBridge.exposeInMainWorld('supertools', {
     return res.data
   },
 
+  // ===== 远程组件本地缓存 API =====
+
+  /** 读取本地缓存的组件源码（未命中返回 null） */
+  readCache: async (key: string): Promise<string | null> => {
+    const result = await ipcRenderer.invoke(IPC_CHANNELS.REMOTE_CACHE_READ, key)
+    const res = result as { ok: boolean; data?: string }
+    return res.ok ? (res.data || null) : null
+  },
+
+  /** 将组件源码写入本地缓存 */
+  writeCache: async (key: string, content: string): Promise<boolean> => {
+    const result = await ipcRenderer.invoke(IPC_CHANNELS.REMOTE_CACHE_WRITE, key, content)
+    return (result as { ok: boolean }).ok
+  },
+
+  /** 删除单个组件缓存 */
+  deleteCache: async (key: string): Promise<boolean> => {
+    const result = await ipcRenderer.invoke(IPC_CHANNELS.REMOTE_CACHE_DELETE, key)
+    return (result as { ok: boolean }).ok
+  },
+
+  /** 清空所有组件缓存 */
+  clearCache: async (): Promise<boolean> => {
+    const result = await ipcRenderer.invoke(IPC_CHANNELS.REMOTE_CACHE_CLEAR)
+    return (result as { ok: boolean }).ok
+  },
+
   // ===== 自动更新 API =====
 
   /** 手动检查更新 */
