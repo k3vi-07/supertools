@@ -24,6 +24,14 @@ export const IPC_CHANNELS = {
   REMOTE_FETCH: 'remote:fetch',
   /** 获取远程仓库 registry.json */
   REMOTE_FETCH_REGISTRY: 'remote:fetch-registry',
+  /** 读取本地缓存的远程组件源码 */
+  REMOTE_CACHE_READ: 'remote:cache-read',
+  /** 写入远程组件源码到本地缓存 */
+  REMOTE_CACHE_WRITE: 'remote:cache-write',
+  /** 删除单个远程组件缓存 */
+  REMOTE_CACHE_DELETE: 'remote:cache-delete',
+  /** 清空所有远程组件缓存 */
+  REMOTE_CACHE_CLEAR: 'remote:cache-clear',
   /** 手动检查更新 */
   UPDATER_CHECK: 'updater:check',
   /** 安装已下载的更新 */
