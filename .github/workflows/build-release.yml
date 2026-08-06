@@ -59,6 +59,10 @@ jobs:
             dist/*.yml
           retention-days: 30
 
+      - name: 📝 Read version
+        id: version
+        run: echo "VERSION=v$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
       - name: 🚀 Release
         uses: softprops/action-gh-release@v2
         with:
@@ -69,6 +73,7 @@ jobs:
             dist/*.yml
           draft: false
           prerelease: false
-          tag_name: v1.2.0
+          tag_name: ${{ steps.version.outputs.VERSION }}
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
