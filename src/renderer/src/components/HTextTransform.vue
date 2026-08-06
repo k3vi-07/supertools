@@ -99,12 +99,15 @@ async function handleTransform(): Promise<void> {
   }
 }
 
-/** 执行反向转换 */
+/** 执行反向转换：将输出解码后放回输入框，并重新计算输出 */
 async function handleReverse(): Promise<void> {
   if (!props.reverseTransform || !outputValue.value) return
   try {
     const result = await props.reverseTransform(outputValue.value)
+    // 交换：解码结果放入输入框，原输入放入输出框
+    const oldInput = inputValue.value
     inputValue.value = result
+    outputValue.value = oldInput
   } catch (err) {
     window.$he3?.message.error(`反转失败: ${(err as Error).message}`)
   }
