@@ -99,12 +99,17 @@ async function handleTransform(): Promise<void> {
   }
 }
 
-/** 反转：输入框与输出框内容互换 */
-function handleReverse(): void {
-  if (!outputValue.value) return
-  const temp = inputValue.value
-  inputValue.value = outputValue.value
-  outputValue.value = temp
+/** 反转：将当前输出作为新输入，用反向函数解码后作为新输出 */
+async function handleReverse(): Promise<void> {
+  if (!props.reverseTransform || !outputValue.value) return
+  try {
+    const output = outputValue.value
+    const result = await props.reverseTransform(output)
+    inputValue.value = output
+    outputValue.value = result
+  } catch (err) {
+    window.$he3?.message.error(`反转失败: ${(err as Error).message}`)
+  }
 }
 
 /** 复制输出 */
