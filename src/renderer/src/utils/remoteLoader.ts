@@ -137,18 +137,17 @@ const sfcOptions = {
     document.head.appendChild(style)
   },
 
-  /** 处理 .vue 中额外的模块导入（如 import xxx from './utils'） */
-  async loadAdditionalModule(url: string): Promise<unknown> {
-    try {
-      const code = await getFileWithCache(url)
-      try {
-        return new Function(`${code}; return typeof exports !== 'undefined' ? exports : (typeof module !== 'undefined' ? module.exports : {})`)()
-      } catch {
-        return null
-      }
-    } catch {
-      return null
-    }
+  /**
+   * 安全策略：禁止远程组件 import 外部模块
+   *
+   * 远程 .vue 组件在浏览器端运行时编译，不允许 import npm 包或外部文件。
+   * 远程组件只能使用 Vue 内置 API 和全局注册的 h- 组件。
+   * 需要 npm 包的功能请使用浏览器原生 API（如 Web Crypto API 替代 crypto-js）。
+   */
+  async loadAdditionalModule(_url: string): Promise<never> {
+    throw new Error(
+      '远程工具不支持 import 外部模块。请使用 Vue 内置 API 或浏览器原生 API。'
+    )
   },
 
   logModuleLoaderError(err: unknown): void {

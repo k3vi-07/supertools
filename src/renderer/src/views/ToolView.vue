@@ -23,9 +23,13 @@
 
     <!-- 工具内容 -->
     <div class="tool-view__content">
-      <div v-if="loadError" class="tool-view__loading">
-        <h-icon icon="mdi:alert-circle-outline" :size="32" color="var(--color-error)" />
-        <span>加载失败</span>
+      <div v-if="loadError" class="tool-view__error">
+        <h-icon :icon="errorIcon" :size="32" color="var(--color-error)" />
+        <span class="tool-view__error-title">{{ errorTitle }}</span>
+        <span class="tool-view__error-msg">{{ loadError.message }}</span>
+        <div class="tool-view__error-actions">
+          <button class="tool-view__retry" @click="retry">重试</button>
+        </div>
       </div>
       <div v-else-if="!toolComponent" class="tool-view__loading">
         <h-icon icon="mdi:loading" :size="32" color="var(--color-primary)" />
@@ -76,27 +80,62 @@ const tool = computed(() => toolsStore.getToolById(toolId.value))
 
 // 手动管理异步组件加载，避免 defineAsyncComponent 的 __esModule 歧义
 const loadedComponent = shallowRef<ReturnType<typeof defineComponent> | null>(null)
-const loadError = ref(false)
+const loadError = ref<{ type: string; message: string } | null>(null)
 
-watch(
-  toolId,
-  async (id) => {
-    loadedComponent.value = null
-    loadError.value = false
-    if (tool.value?.component) {
-      try {
-        const result = await tool.value.component()
-        // result 可能是 { default: Component } 或 Component 本身
-        const comp = (result as { default?: unknown }).default || result
-        loadedComponent.value = comp as ReturnType<typeof defineComponent>
-      } catch (err) {
-        console.error('[ToolView] 组件加载失败:', err)
-        loadError.value = true
-      }
+/** 根据错误信息推断错误类型 */
+function classifyError(err: unknown): { type: string; message: string } {
+  const msg = (err as Error)?.message || String(err)
+  if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('ERR_')) {
+    return { type: 'network', message: '网络连接失败，请检查网络后重试' }
+  }
+  if (msg.includes('404') || msg.includes('Not Found') || msg.includes('所有版本均加载失败')) {
+    return { type: 'not-found', message: '工具文件不存在，可能已被移除' }
+  }
+  if (msg.includes('不支持 import') || msg.includes('编译') || msg.includes('SyntaxError') || msg.includes('Unexpected')) {
+    return { type: 'compile', message: '工具代码编译失败: ' + msg.substring(0, 150) }
+  }
+  return { type: 'unknown', message: msg.substring(0, 200) }
+}
+
+const errorIcon = computed(() => {
+  switch (loadError.value?.type) {
+    case 'network': return 'mdi:wifi-off'
+    case 'not-found': return 'mdi:file-question'
+    case 'compile': return 'mdi:bug'
+    default: return 'mdi:alert-circle-outline'
+  }
+})
+
+const errorTitle = computed(() => {
+  switch (loadError.value?.type) {
+    case 'network': return '网络错误'
+    case 'not-found': return '工具不存在'
+    case 'compile': return '编译错误'
+    default: return '加载失败'
+  }
+})
+
+async function loadTool(): Promise<void> {
+  loadedComponent.value = null
+  loadError.value = null
+  if (tool.value?.component) {
+    try {
+      const result = await tool.value.component()
+      const comp = (result as { default?: unknown }).default || result
+      loadedComponent.value = comp as ReturnType<typeof defineComponent>
+    } catch (err) {
+      console.error('[ToolView] 组件加载失败:', err)
+      loadError.value = classifyError(err)
     }
-  },
-  { immediate: true }
-)
+  }
+}
+
+watch(toolId, () => { loadTool() }, { immediate: true })
+
+/** 重试加载 */
+function retry(): void {
+  loadTool()
+}
 
 const toolComponent = computed(() => loadedComponent.value)
 
@@ -217,6 +256,54 @@ function openTool(id: string): void {
 
   :deep(.iconify) {
     animation: spin 1s linear infinite;
+  }
+}
+
+.tool-view__error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 60px;
+  text-align: center;
+
+  :deep(.iconify) {
+    margin-bottom: 4px;
+  }
+}
+
+.tool-view__error-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-error);
+}
+
+.tool-view__error-msg {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  max-width: 400px;
+  word-break: break-word;
+  line-height: 1.5;
+}
+
+.tool-view__error-actions {
+  margin-top: 8px;
+}
+
+.tool-view__retry {
+  padding: 6px 20px;
+  border: 1px solid var(--color-primary);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-primary);
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.15s;
+
+  &:hover {
+    background: var(--color-primary);
+    color: white;
   }
 }
 

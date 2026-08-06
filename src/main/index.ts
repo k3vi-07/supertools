@@ -514,13 +514,55 @@ function setupIpcHandlers(): void {
   })
 
   // 远程文件获取（绕过 CORS，通过主进程 net 模块）
+  // 安全策略：域名白名单 + 响应大小限制 + 路径穿越检查
+  const ALLOWED_DOMAINS = new Set([
+    'cdn.jsdelivr.net',
+    'raw.githubusercontent.com',
+    'api.github.com',
+    'data.jsdelivr.com'
+  ])
+  const MAX_FETCH_SIZE = 5 * 1024 * 1024 // 5MB
+
+  /** 校验 URL 是否安全（域名白名单 + 路径穿越检查） */
+  function validateFetchUrl(url: string): { ok: boolean; error?: string } {
+    let parsed: URL
+    try {
+      parsed = new URL(url)
+    } catch {
+      return { ok: false, error: '无效的 URL' }
+    }
+    if (!ALLOWED_DOMAINS.has(parsed.hostname)) {
+      return { ok: false, error: `域名 ${parsed.hostname} 不在白名单中` }
+    }
+    // 路径穿越检查
+    if (parsed.pathname.includes('..') || parsed.pathname.includes('%2e')) {
+      return { ok: false, error: 'URL 路径包含非法字符' }
+    }
+    return { ok: true }
+  }
+
   ipcMain.handle(IPC_CHANNELS.REMOTE_FETCH, async (_event, url: string): Promise<{ ok: boolean; data?: string; error?: string; status?: number }> => {
     try {
+      const urlCheck = validateFetchUrl(url)
+      if (!urlCheck.ok) {
+        return { ok: false, error: urlCheck.error }
+      }
+
       const response = await net.fetch(url)
       if (!response.ok) {
         return { ok: false, error: `HTTP ${response.status}`, status: response.status }
       }
+
+      // 响应大小限制
+      const contentLength = parseInt(response.headers.get('content-length') || '0', 10)
+      if (contentLength > MAX_FETCH_SIZE) {
+        return { ok: false, error: `响应过大 (${(contentLength / 1024 / 1024).toFixed(1)}MB)，上限 5MB` }
+      }
+
       const data = await response.text()
+      if (data.length > MAX_FETCH_SIZE) {
+        return { ok: false, error: '响应数据超过 5MB 限制' }
+      }
       return { ok: true, data, status: response.status }
     } catch (err) {
       return { ok: false, error: (err as Error).message }
@@ -534,6 +576,11 @@ function setupIpcHandlers(): void {
   //   1. 先通过 GitHub API 获取 master 分支最新 commit hash
   //   2. 用 commit hash 构建 CDN URL（commit hash 不可变，CDN 缓存永远正确）
   //   3. GitHub API 失败时，回退到 latest/master/main 并行请求，取工具数最多的
+  // 安全：owner 格式校验 + registry 大小限制 + commit hash 校验
+  const MAX_REGISTRY_SIZE = 1024 * 1024 // 1MB
+  const REPO_REGEX = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/
+  const COMMIT_HASH_REGEX = /^[a-f0-9]{40}$/
+
   ipcMain.handle(IPC_CHANNELS.REMOTE_FETCH_REGISTRY, async (_event, repo: string): Promise<{ ok: boolean; data?: unknown; error?: string }> => {
     try {
       // 解析 repo 和 version
@@ -543,6 +590,11 @@ function setupIpcHandlers(): void {
       if (atIndex > 0) {
         owner = repo.substring(0, atIndex)
         version = repo.substring(atIndex + 1)
+      }
+
+      // 安全校验：owner 格式必须是 用户名/仓库名
+      if (!REPO_REGEX.test(owner)) {
+        return { ok: false, error: `无效的仓库地址: ${owner}` }
       }
 
       /** 带超时的 fetch */
@@ -568,7 +620,11 @@ function setupIpcHandlers(): void {
           )
           if (resp && resp.ok) {
             const data = await resp.json() as { sha?: string }
-            return data.sha || null
+            const sha = data.sha || ''
+            // 安全校验：commit hash 必须是 40 字符 hex
+            if (sha && COMMIT_HASH_REGEX.test(sha)) {
+              return sha
+            }
           }
         } catch {
           // 网络问题，回退
@@ -576,12 +632,21 @@ function setupIpcHandlers(): void {
         return null
       }
 
-      /** 从 URL 获取 registry 数据 */
+      /** 从 URL 获取 registry 数据（含大小限制） */
       const fetchRegistry = async (url: string): Promise<{ data: { tools: unknown[] } | null; count: number; error: string }> => {
         try {
           const response = await fetchWithTimeout(url)
           if (response && response.ok) {
-            const data = await response.json() as { tools?: unknown[] }
+            // 大小限制：registry.json 不应超过 1MB
+            const contentLength = parseInt(response.headers.get('content-length') || '0', 10)
+            if (contentLength > MAX_REGISTRY_SIZE) {
+              return { data: null, count: 0, error: 'registry.json 过大 (>1MB)' }
+            }
+            const text = await response.text()
+            if (text.length > MAX_REGISTRY_SIZE) {
+              return { data: null, count: 0, error: 'registry.json 超过 1MB 限制' }
+            }
+            const data = JSON.parse(text) as { tools?: unknown[] }
             const count = Array.isArray(data?.tools) ? data.tools.length : 0
             return { data: data as { tools: unknown[] }, count, error: '' }
           }

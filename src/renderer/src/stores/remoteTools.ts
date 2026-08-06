@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import type { RemoteToolEntry, RemoteRegistry } from '@shared/types'
 import type { ToolManifest } from '../tools/types'
 import { createRemoteComponentLoader, precacheRemoteComponent, evictRemoteComponentCache } from '../utils/remoteLoader'
+import { validateRegistry } from '../utils/registryValidator'
 
 const INSTALLED_KEY = 'supertools:installed-remote-tools'
 const REPOS_KEY = 'supertools:remote-repos'
@@ -153,19 +154,27 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
     save()
   }
 
-  /** 获取远程仓库的工具清单 */
+  /** 获取远程仓库的工具清单（含 schema 校验） */
   async function fetchRegistry(repoId: string, force = false): Promise<RemoteRegistry> {
     if (!force && registryCache.value[repoId]) {
       return registryCache.value[repoId]
     }
     loadingRegistry.value = true
     try {
-      const data = (await window.supertools.fetchRegistry(repoId)) as RemoteRegistry
-      if (!data || !Array.isArray(data.tools)) {
-        throw new Error('无效的仓库清单格式')
+      const data = await window.supertools.fetchRegistry(repoId)
+      if (!data) {
+        throw new Error('获取仓库清单失败')
       }
-      registryCache.value[repoId] = data
-      return data
+      // schema 校验：过滤非法/恶意数据
+      const result = validateRegistry(data)
+      if (!result.valid && result.errors.length > 0) {
+        console.warn(`[remoteTools] 仓库 ${repoId} 校验有 ${result.errors.length} 个警告:`, result.errors.slice(0, 5))
+      }
+      if (!result.sanitized || result.sanitized.tools.length === 0) {
+        throw new Error(`仓库清单校验失败: ${result.errors.slice(0, 3).join('; ')}`)
+      }
+      registryCache.value[repoId] = result.sanitized
+      return result.sanitized
     } finally {
       loadingRegistry.value = false
     }

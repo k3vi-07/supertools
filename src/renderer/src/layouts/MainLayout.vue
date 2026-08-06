@@ -179,7 +179,7 @@ let navHandler: ((toolId: string) => void) | null = null
 onMounted(() => {
   favoritesStore.init()
   historyStore.init()
-  remoteToolsStore.init()
+  // remoteToolsStore.init() 已在 main.ts 中调用，此处不再重复初始化
   document.addEventListener('keydown', handleKeyDown)
 
   // 暴露 router 给 App.vue 用于导航
