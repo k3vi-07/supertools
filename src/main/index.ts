@@ -529,6 +529,11 @@ function setupIpcHandlers(): void {
 
   // 获取远程仓库 registry.json
   // repo 格式: 'user/repo' 或 'user/repo@version'
+  //
+  // 缓存策略（根治 CDN 缓存过期问题）：
+  //   1. 先通过 GitHub API 获取 master 分支最新 commit hash
+  //   2. 用 commit hash 构建 CDN URL（commit hash 不可变，CDN 缓存永远正确）
+  //   3. GitHub API 失败时，回退到 latest/master/main 并行请求，取工具数最多的
   ipcMain.handle(IPC_CHANNELS.REMOTE_FETCH_REGISTRY, async (_event, repo: string): Promise<{ ok: boolean; data?: unknown; error?: string }> => {
     try {
       // 解析 repo 和 version
@@ -538,19 +543,6 @@ function setupIpcHandlers(): void {
       if (atIndex > 0) {
         owner = repo.substring(0, atIndex)
         version = repo.substring(atIndex + 1)
-      }
-
-      // 请求优先级：版本标签 > latest > master > main
-      // 版本标签和 latest 是不可变的，CDN 缓存始终正确
-      // master 分支的 CDN 缓存可能过期（jsDelivr 已知问题）
-      const refs = version ? [version] : ['latest', 'master', 'main']
-
-      // 多源策略：并行请求多个 CDN，取工具数最多的结果
-      // jsDelivr 优先（国内速度快），GitHub Raw 作为备选
-      const sources: string[] = []
-      for (const r of refs) {
-        sources.push(`https://cdn.jsdelivr.net/gh/${owner}@${r}/registry.json`)
-        sources.push(`https://raw.githubusercontent.com/${owner}/${r}/registry.json`)
       }
 
       /** 带超时的 fetch */
@@ -567,31 +559,67 @@ function setupIpcHandlers(): void {
         }
       }
 
-      // 并行请求所有源
-      const fetchPromises = sources.map(async (url) => {
+      /** 获取指定分支最新 commit hash（用于构建不可变 CDN URL） */
+      const getLatestCommitHash = async (branch: string): Promise<string | null> => {
+        try {
+          const resp = await fetchWithTimeout(
+            `https://api.github.com/repos/${owner}/commits/${branch}`,
+            8000
+          )
+          if (resp && resp.ok) {
+            const data = await resp.json() as { sha?: string }
+            return data.sha || null
+          }
+        } catch {
+          // 网络问题，回退
+        }
+        return null
+      }
+
+      /** 从 URL 获取 registry 数据 */
+      const fetchRegistry = async (url: string): Promise<{ data: { tools: unknown[] } | null; count: number; error: string }> => {
         try {
           const response = await fetchWithTimeout(url)
           if (response && response.ok) {
             const data = await response.json() as { tools?: unknown[] }
             const count = Array.isArray(data?.tools) ? data.tools.length : 0
-            return { data, count, error: '' }
+            return { data: data as { tools: unknown[] }, count, error: '' }
           }
           return { data: null, count: 0, error: `HTTP ${response?.status || 'unknown'}` }
         } catch (err) {
           return { data: null, count: 0, error: (err as Error).message }
         }
-      })
+      }
 
+      // ---- 第一步：尝试用 commit hash 获取（根治 CDN 缓存问题）----
+      const branch = version || 'master'
+      const commitHash = await getLatestCommitHash(branch)
+
+      const sources: string[] = []
+      if (commitHash) {
+        // 用 commit hash 构建 URL — 不可变，CDN 缓存永远正确
+        sources.push(`https://cdn.jsdelivr.net/gh/${owner}@${commitHash}/registry.json`)
+        sources.push(`https://raw.githubusercontent.com/${owner}/${commitHash}/registry.json`)
+      }
+
+      // ---- 第二步：回退源（commit hash 获取失败或作为补充）----
+      const refs = version ? [version] : ['latest', 'master', 'main']
+      for (const r of refs) {
+        sources.push(`https://cdn.jsdelivr.net/gh/${owner}@${r}/registry.json`)
+        sources.push(`https://raw.githubusercontent.com/${owner}/${r}/registry.json`)
+      }
+
+      // 并行请求所有源，取工具数最多的结果
+      const fetchPromises = sources.map((url) => fetchRegistry(url))
       const results = await Promise.all(fetchPromises)
 
-      // 取工具数最多的结果
       let bestData: { tools: unknown[] } | null = null
       let bestCount = 0
       let lastError = ''
       for (const result of results) {
         if (result.count > bestCount) {
           bestCount = result.count
-          bestData = result.data as { tools: unknown[] }
+          bestData = result.data
         }
         if (!lastError && result.error) {
           lastError = result.error
