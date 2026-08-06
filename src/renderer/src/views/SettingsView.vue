@@ -150,6 +150,34 @@
           <span class="about-info__label">工具总数</span>
           <span>{{ toolsStore.tools.length }} 个</span>
         </div>
+        <div class="about-info__row">
+          <span class="about-info__label">作者</span>
+          <div class="about-info__links">
+            <a class="about-info__link" @click="openUrl('https://github.com/k3vi-07')">k3vi-07</a>
+          </div>
+        </div>
+        <div class="about-info__row">
+          <span class="about-info__label">项目仓库</span>
+          <div class="about-info__links">
+            <a class="about-info__link" @click="openUrl('https://github.com/k3vi-07/supertools')">
+              <h-icon icon="mdi:github" :size="14" />
+              k3vi-07/supertools
+            </a>
+          </div>
+        </div>
+        <div class="about-info__row">
+          <span class="about-info__label">社区工具仓库</span>
+          <div class="about-info__links">
+            <a class="about-info__link" @click="openUrl('https://github.com/k3vi-07/supertools-community')">
+              <h-icon icon="mdi:github" :size="14" />
+              k3vi-07/supertools-community
+            </a>
+          </div>
+        </div>
+        <div class="about-info__row">
+          <span class="about-info__label">许可证</span>
+          <span>MIT License © 2026 k3vi-07</span>
+        </div>
       </div>
     </h-card-box>
   </div>
@@ -171,6 +199,11 @@ const isMac = navigator.platform.toUpperCase().includes('MAC')
 /** 打开发布说明页面 */
 function openReleaseNotes(): void {
   window.$he3?.shellOpenExternal('https://github.com/k3vi-07/supertools/releases')
+}
+
+/** 打开外部链接 */
+function openUrl(url: string): void {
+  window.$he3?.shellOpenExternal(url)
 }
 </script>
 
@@ -307,6 +340,27 @@ function openReleaseNotes(): void {
     width: 100px;
     color: var(--text-tertiary);
     flex-shrink: 0;
+  }
+
+  &__links {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  &__link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--color-primary);
+    cursor: pointer;
+    font-size: 13px;
+    transition: opacity 0.15s;
+
+    &:hover {
+      opacity: 0.8;
+      text-decoration: underline;
+    }
   }
 }
 </style>
