@@ -9,7 +9,11 @@ import { useSettingsStore } from './stores/settings'
 import { useRemoteToolsStore } from './stores/remoteTools'
 import { useUpdaterStore } from './stores/updater'
 import { i18n } from './i18n'
+import { setupIcons } from './utils/iconSetup'
 import './assets/styles/global.less'
+
+// 预加载离线图标集（MDI 7600+ 图标，不再依赖网络）
+setupIcons()
 
 const router = createRouter({
   history: createWebHashHistory(),
