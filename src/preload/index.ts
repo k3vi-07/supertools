@@ -230,5 +230,17 @@ contextBridge.exposeInMainWorld('supertools', {
   /** 监听主进程推送的更新事件 */
   onUpdateEvent: (cb: (event: { type: string; info?: Record<string, unknown> }) => void): void => {
     ipcRenderer.on(IPC_CHANNELS.UPDATER_EVENT, (_e, event) => cb(event))
+  },
+
+  // ===== 快捷键配置 API =====
+
+  /** 获取当前快捷键配置 */
+  getShortcuts: async (): Promise<{ main: string; search: string; appSearch: string }> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.SHORTCUT_GET)
+  },
+
+  /** 更新快捷键配置 */
+  updateShortcuts: async (shortcuts: Record<string, string>): Promise<{ ok: boolean; error?: string }> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.SHORTCUT_UPDATE, shortcuts)
   }
 })

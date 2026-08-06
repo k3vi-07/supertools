@@ -53,12 +53,16 @@ try {
   // 生产模式：直接赋值（Vite 内联 Vue 后属性可写）
   ;(Vue as Record<string, unknown>).resolveComponent = _patchedResolve
 } catch {
-  // 开发模式：ESM 导入属性只读，用 defineProperty 强制覆盖
-  Object.defineProperty(Vue, 'resolveComponent', {
-    value: _patchedResolve,
-    writable: true,
-    configurable: true
-  })
+  // 开发模式：ESM 导入属性只读，尝试 defineProperty
+  try {
+    Object.defineProperty(Vue, 'resolveComponent', {
+      value: _patchedResolve,
+      writable: true,
+      configurable: true
+    })
+  } catch {
+    // ESM 属性也不可配置，静默跳过，靠 componentDef.components 注入兜底
+  }
 }
 
 /** 内存缓存：避免同一 session 内重复读磁盘 */

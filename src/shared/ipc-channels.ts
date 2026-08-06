@@ -39,7 +39,11 @@ export const IPC_CHANNELS = {
   /** 获取当前更新状态 */
   UPDATER_GET_STATUS: 'updater:status',
   /** 主进程 -> 渲染进程的更新事件推送 */
-  UPDATER_EVENT: 'updater:event'
+  UPDATER_EVENT: 'updater:event',
+  /** 更新快捷键配置 */
+  SHORTCUT_UPDATE: 'shortcut:update',
+  /** 获取当前快捷键配置 */
+  SHORTCUT_GET: 'shortcut:get'
 } as const
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS]

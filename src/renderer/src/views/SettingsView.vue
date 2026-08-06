@@ -30,24 +30,37 @@
       <div class="settings-row">
         <div>
           <div>{{ t('settings.mainShortcut') }}</div>
-          <div class="settings-row__hint">显示/隐藏主窗口</div>
+          <div class="settings-row__hint">{{ t('settings.shortcutHintMain') }}</div>
         </div>
-        <kbd class="settings-kbd">{{ isMac ? 'Option' : 'Alt' }} + Space</kbd>
+        <ShortcutRecorder
+          :model-value="settingsStore.mainShortcut"
+          :default-value="defaultShortcuts.main"
+          @recorded="(acc) => onSaveShortcut('main', acc)"
+        />
       </div>
       <div class="settings-row">
         <div>
           <div>{{ t('settings.searchShortcut') }}</div>
-          <div class="settings-row__hint">打开快速搜索</div>
+          <div class="settings-row__hint">{{ t('settings.shortcutHintSearch') }}</div>
         </div>
-        <kbd class="settings-kbd">{{ isMac ? '⌘' : 'Ctrl' }} + Shift + Space</kbd>
+        <ShortcutRecorder
+          :model-value="settingsStore.searchShortcut"
+          :default-value="defaultShortcuts.search"
+          @recorded="(acc) => onSaveShortcut('search', acc)"
+        />
       </div>
       <div class="settings-row">
         <div>
-          <div>应用内搜索</div>
-          <div class="settings-row__hint">在主窗口内搜索工具</div>
+          <div>{{ t('settings.appSearchShortcut') }}</div>
+          <div class="settings-row__hint">{{ t('settings.shortcutHintAppSearch') }}</div>
         </div>
-        <kbd class="settings-kbd">{{ isMac ? '⌘' : 'Ctrl' }} + K</kbd>
+        <ShortcutRecorder
+          :model-value="settingsStore.appSearchShortcut"
+          :default-value="defaultShortcuts.appSearch"
+          @recorded="(acc) => onSaveShortcut('appSearch', acc)"
+        />
       </div>
+      <div v-if="shortcutError" class="settings-shortcut-error">{{ shortcutError }}</div>
     </h-card-box>
 
     <h-card-box :text="t('settings.update.title')" icon="mdi:cloud-sync-outline">
@@ -184,10 +197,12 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSettingsStore } from '../stores/settings'
 import { useToolsStore } from '../stores/tools'
 import { useUpdaterStore } from '../stores/updater'
+import ShortcutRecorder from '../components/ShortcutRecorder.vue'
 
 const { t } = useI18n()
 const settingsStore = useSettingsStore()
@@ -195,6 +210,28 @@ const toolsStore = useToolsStore()
 const updaterStore = useUpdaterStore()
 
 const isMac = navigator.platform.toUpperCase().includes('MAC')
+
+/** 默认快捷键值 */
+const defaultShortcuts = {
+  main: isMac ? 'Alt+Space' : 'Alt+Space',
+  search: isMac ? 'Command+Shift+Space' : 'Ctrl+Shift+Space',
+  appSearch: isMac ? 'Command+K' : 'Ctrl+K'
+}
+
+/** 快捷键保存错误提示 */
+const shortcutError = ref('')
+
+/** 保存快捷键 */
+async function onSaveShortcut(type: 'main' | 'search' | 'appSearch', accelerator: string): Promise<void> {
+  shortcutError.value = ''
+  const result = await settingsStore.setShortcut(type, accelerator)
+  if (!result.ok) {
+    shortcutError.value = result.error || t('settings.shortcutFailed')
+    window.$he3?.message.error(result.error || t('settings.shortcutFailed'))
+  } else {
+    window.$he3?.message.success(accelerator ? t('settings.shortcutUpdated') : t('settings.shortcutDisabledMsg'))
+  }
+}
 
 /** 打开发布说明页面 */
 function openReleaseNotes(): void {
@@ -254,6 +291,15 @@ function openUrl(url: string): void {
   font-size: 12px;
   font-family: 'SF Mono', Menlo, monospace;
   color: var(--text-secondary);
+}
+
+.settings-shortcut-error {
+  padding: 8px 12px;
+  margin-top: 8px;
+  border-radius: var(--radius-sm);
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  font-size: 12px;
 }
 
 .update-version {

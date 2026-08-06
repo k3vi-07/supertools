@@ -128,8 +128,16 @@ const remoteToolsStore = useRemoteToolsStore()
 const remoteCount = computed(() => remoteToolsStore.installedTools.length)
 
 const shortcutHint = computed(() => {
+  const acc = settingsStore.appSearchShortcut
+  if (!acc) return ''
   const isMac = navigator.platform.toUpperCase().includes('MAC')
-  return isMac ? '⌘K' : 'Ctrl+K'
+  return acc
+    .replace(/Command\+/g, isMac ? '⌘+' : 'Ctrl+')
+    .replace(/Ctrl\+/g, 'Ctrl+')
+    .replace(/Option\+/g, isMac ? '⌥+' : 'Alt+')
+    .replace(/Alt\+/g, isMac ? '⌥+' : 'Alt+')
+    .replace(/Shift\+/g, isMac ? '⇧+' : 'Shift+')
+    .replace(/\+/g, '')
 })
 
 /** 弹出式搜索可见性 */
@@ -139,9 +147,27 @@ function focusSearch(): void {
   searchVisible.value = true
 }
 
-// 全局快捷键监听（Cmd+K / Ctrl+K）
+/** 检查按键是否匹配快捷键 */
+function matchesShortcut(e: KeyboardEvent, accelerator: string): boolean {
+  if (!accelerator) return false
+  const parts = accelerator.split('+')
+  const needCtrl = parts.includes('Ctrl')
+  const needCmd = parts.includes('Command')
+  const needAlt = parts.includes('Alt')
+  const needShift = parts.includes('Shift')
+  const key = parts[parts.length - 1].toLowerCase()
+
+  if (needCtrl !== e.ctrlKey) return false
+  if (needCmd !== e.metaKey) return false
+  if (needAlt !== e.altKey) return false
+  if (needShift !== e.shiftKey) return false
+  return e.key.toLowerCase() === key
+}
+
+// 全局快捷键监听（从设置读取）
 function handleKeyDown(e: KeyboardEvent): void {
-  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+  const acc = settingsStore.appSearchShortcut
+  if (acc && matchesShortcut(e, acc)) {
     e.preventDefault()
     searchVisible.value = true
   }

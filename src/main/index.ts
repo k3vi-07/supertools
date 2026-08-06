@@ -166,28 +166,107 @@ function toggleMainWindow(): void {
   }
 }
 
-/** 注册全局快捷键 */
+/** 默认快捷键配置 */
+const DEFAULT_SHORTCUTS = {
+  main: isMac ? 'Option+Space' : 'Alt+Space',
+  search: isMac ? 'Command+Shift+Space' : 'Ctrl+Shift+Space',
+  appSearch: isMac ? 'Command+K' : 'Ctrl+K'
+}
+
+/** 快捷键配置文件路径 */
+function getShortcutsPath(): string {
+  return join(app.getPath('userData'), 'shortcuts.json')
+}
+
+/** 当前生效的快捷键配置 */
+let currentShortcuts = { ...DEFAULT_SHORTCUTS }
+
+/** 加载快捷键配置 */
+function loadShortcuts(): typeof DEFAULT_SHORTCUTS {
+  try {
+    const filePath = getShortcutsPath()
+    if (existsSync(filePath)) {
+      const data = JSON.parse(readFileSync(filePath, 'utf-8'))
+      return { ...DEFAULT_SHORTCUTS, ...data }
+    }
+  } catch {
+    // 忽略
+  }
+  return { ...DEFAULT_SHORTCUTS }
+}
+
+/** 保存快捷键配置 */
+function saveShortcuts(shortcuts: typeof DEFAULT_SHORTCUTS): void {
+  try {
+    writeFileSync(getShortcutsPath(), JSON.stringify(shortcuts, null, 2), 'utf-8')
+  } catch {
+    // 忽略
+  }
+}
+
+/** 注册单个全局快捷键，返回是否成功 */
+function registerOne(accelerator: string, callback: () => void): boolean {
+  if (!accelerator) return true // 空值 = 禁用，视为成功
+  return globalShortcut.register(accelerator, callback)
+}
+
+/** 注销单个快捷键 */
+function unregisterOne(accelerator: string): void {
+  if (accelerator && globalShortcut.isRegistered(accelerator)) {
+    globalShortcut.unregister(accelerator)
+  }
+}
+
+/** 注册全局快捷键（从配置读取） */
 function registerShortcuts(): void {
-  // 主窗口呼出: macOS = Option+Space, Windows/Linux = Alt+Space
-  // 注意：某些系统 Space 可能被占用，提供 Alt+Shift+Space 作为备选
-  const mainAccelerator = isMac ? 'Option+Space' : 'Alt+Space'
-  const searchAccelerator = isMac ? 'Command+Shift+Space' : 'Ctrl+Shift+Space'
+  currentShortcuts = loadShortcuts()
 
-  try {
-    globalShortcut.register(mainAccelerator, () => {
-      toggleMainWindow()
-    })
-  } catch {
-    console.warn(`Failed to register ${mainAccelerator}`)
+  registerOne(currentShortcuts.main, () => {
+    toggleMainWindow()
+  })
+  registerOne(currentShortcuts.search, () => {
+    showSearchWindow()
+  })
+}
+
+/** 更新快捷键配置（unregister 旧的 → register 新的） */
+function updateShortcuts(
+  newShortcuts: Partial<typeof DEFAULT_SHORTCUTS>
+): { ok: boolean; error?: string } {
+  const oldShortcuts = { ...currentShortcuts }
+  const merged = { ...currentShortcuts, ...newShortcuts }
+
+  // 注销受影响的全局快捷键
+  if (newShortcuts.main !== undefined) {
+    unregisterOne(oldShortcuts.main)
+  }
+  if (newShortcuts.search !== undefined) {
+    unregisterOne(oldShortcuts.search)
   }
 
-  try {
-    globalShortcut.register(searchAccelerator, () => {
-      showSearchWindow()
-    })
-  } catch {
-    console.warn(`Failed to register ${searchAccelerator}`)
+  // 尝试注册新的
+  if (newShortcuts.main !== undefined) {
+    if (!registerOne(merged.main, () => toggleMainWindow())) {
+      // 注册失败，回滚
+      registerOne(oldShortcuts.main, () => toggleMainWindow())
+      return { ok: false, error: `快捷键 "${merged.main}" 注册失败，可能被其他应用占用` }
+    }
   }
+  if (newShortcuts.search !== undefined) {
+    if (!registerOne(merged.search, () => showSearchWindow())) {
+      // 注册失败，回滚
+      registerOne(oldShortcuts.main, () => toggleMainWindow()) // 确保新注册的也回滚
+      if (newShortcuts.main !== undefined) {
+        registerOne(oldShortcuts.main, () => toggleMainWindow())
+      }
+      registerOne(oldShortcuts.search, () => showSearchWindow())
+      return { ok: false, error: `快捷键 "${merged.search}" 注册失败，可能被其他应用占用` }
+    }
+  }
+
+  currentShortcuts = merged
+  saveShortcuts(merged)
+  return { ok: true }
 }
 
 /** 创建系统托盘 */
@@ -422,6 +501,18 @@ function setupIpcHandlers(): void {
     currentTheme = theme
   })
 
+  // ===== 快捷键配置 =====
+
+  // 获取当前快捷键配置
+  ipcMain.handle(IPC_CHANNELS.SHORTCUT_GET, () => {
+    return currentShortcuts
+  })
+
+  // 更新快捷键配置
+  ipcMain.handle(IPC_CHANNELS.SHORTCUT_UPDATE, (_event, shortcuts: Record<string, string>) => {
+    return updateShortcuts(shortcuts)
+  })
+
   // 远程文件获取（绕过 CORS，通过主进程 net 模块）
   ipcMain.handle(IPC_CHANNELS.REMOTE_FETCH, async (_event, url: string): Promise<{ ok: boolean; data?: string; error?: string; status?: number }> => {
     try {
@@ -451,34 +542,56 @@ function setupIpcHandlers(): void {
 
       const branches = version ? [version] : ['master', 'main']
 
-      // 策略：优先用 GitHub Raw API（无 CDN 缓存问题，始终最新）
-      // 回退到 jsDelivr CDN（加速国内访问，但可能缓存旧数据）
-      // 先 GitHub Raw 再 jsDelivr，但选工具数最多的那个
+      // 多源策略：并行请求多个 CDN，取工具数最多的结果
+      // jsDelivr 优先（国内速度快），GitHub Raw 作为备选
       const sources: string[] = []
       for (const b of branches) {
-        sources.push(`https://raw.githubusercontent.com/${owner}/${b}/registry.json`)
         sources.push(`https://cdn.jsdelivr.net/gh/${owner}@${b}/registry.json`)
+        sources.push(`https://raw.githubusercontent.com/${owner}/${b}/registry.json`)
       }
 
+      /** 带超时的 fetch */
+      const fetchWithTimeout = async (url: string, timeoutMs = 10000): Promise<Response | null> => {
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), timeoutMs)
+        try {
+          const resp = await net.fetch(url, { signal: controller.signal as never })
+          clearTimeout(timer)
+          return resp
+        } catch {
+          clearTimeout(timer)
+          return null
+        }
+      }
+
+      // 并行请求所有源
+      const fetchPromises = sources.map(async (url) => {
+        try {
+          const response = await fetchWithTimeout(url)
+          if (response && response.ok) {
+            const data = await response.json() as { tools?: unknown[] }
+            const count = Array.isArray(data?.tools) ? data.tools.length : 0
+            return { data, count, error: '' }
+          }
+          return { data: null, count: 0, error: `HTTP ${response?.status || 'unknown'}` }
+        } catch (err) {
+          return { data: null, count: 0, error: (err as Error).message }
+        }
+      })
+
+      const results = await Promise.all(fetchPromises)
+
+      // 取工具数最多的结果
       let bestData: { tools: unknown[] } | null = null
       let bestCount = 0
       let lastError = ''
-
-      for (const url of sources) {
-        try {
-          const response = await net.fetch(url)
-          if (response.ok) {
-            const data = await response.json() as { tools?: unknown[] }
-            const count = Array.isArray(data?.tools) ? data.tools.length : 0
-            // 取工具数最多的结果（避免 CDN 缓存旧版本）
-            if (count > bestCount) {
-              bestCount = count
-              bestData = data as { tools: unknown[] }
-            }
-          }
-          lastError = lastError || `HTTP ${response.status}`
-        } catch (err) {
-          lastError = lastError || (err as Error).message
+      for (const result of results) {
+        if (result.count > bestCount) {
+          bestCount = result.count
+          bestData = result.data as { tools: unknown[] }
+        }
+        if (!lastError && result.error) {
+          lastError = result.error
         }
       }
 

@@ -43,6 +43,10 @@ interface SuperToolsAPI {
   getUpdateStatus(): Promise<{ currentVersion: string }>
   /** 监听主进程推送的更新事件 */
   onUpdateEvent(cb: (event: UpdateEvent) => void): void
+  /** 获取当前快捷键配置 */
+  getShortcuts(): Promise<{ main: string; search: string; appSearch: string }>
+  /** 更新快捷键配置 */
+  updateShortcuts(shortcuts: Record<string, string>): Promise<{ ok: boolean; error?: string }>
 }
 
 declare global {
