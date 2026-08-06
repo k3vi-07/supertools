@@ -540,14 +540,17 @@ function setupIpcHandlers(): void {
         version = repo.substring(atIndex + 1)
       }
 
-      const branches = version ? [version] : ['master', 'main']
+      // 请求优先级：版本标签 > latest > master > main
+      // 版本标签和 latest 是不可变的，CDN 缓存始终正确
+      // master 分支的 CDN 缓存可能过期（jsDelivr 已知问题）
+      const refs = version ? [version] : ['latest', 'master', 'main']
 
       // 多源策略：并行请求多个 CDN，取工具数最多的结果
       // jsDelivr 优先（国内速度快），GitHub Raw 作为备选
       const sources: string[] = []
-      for (const b of branches) {
-        sources.push(`https://cdn.jsdelivr.net/gh/${owner}@${b}/registry.json`)
-        sources.push(`https://raw.githubusercontent.com/${owner}/${b}/registry.json`)
+      for (const r of refs) {
+        sources.push(`https://cdn.jsdelivr.net/gh/${owner}@${r}/registry.json`)
+        sources.push(`https://raw.githubusercontent.com/${owner}/${r}/registry.json`)
       }
 
       /** 带超时的 fetch */

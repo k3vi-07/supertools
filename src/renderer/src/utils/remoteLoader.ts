@@ -244,8 +244,9 @@ export async function loadRemoteComponent(
   path: string,
   version = 'master'
 ): Promise<Component> {
-  // 尝试顺序：指定版本 → master → main
-  const versions = [version, 'master', 'main'].filter((v, i, a) => a.indexOf(v) === i)
+  // 尝试顺序：指定版本 → latest → master → main
+  // latest 是版本标签，CDN 缓存始终正确；master 可能有过期缓存
+  const versions = [version, 'latest', 'master', 'main'].filter((v, i, a) => a.indexOf(v) === i)
   let lastError: unknown = null
 
   for (const ver of versions) {

@@ -53,17 +53,28 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
   /** 是否正在检查更新 */
   const checkingUpdates = ref(false)
 
-  /** 初始化：从 localStorage 加载 */
+  /** 默认社区仓库（首次使用自动添加） */
+  const DEFAULT_REPO = 'k3vi-07/supertools-community'
+
+  /** 初始化：从 localStorage 加载，首次使用自动添加默认仓库 */
   function init(): void {
     try {
       const savedRepos = localStorage.getItem(REPOS_KEY)
-      if (savedRepos) repos.value = JSON.parse(savedRepos)
+      if (savedRepos) {
+        repos.value = JSON.parse(savedRepos)
+      }
       const savedInstalled = localStorage.getItem(INSTALLED_KEY)
       if (savedInstalled) installedTools.value = JSON.parse(savedInstalled)
       const savedRatings = localStorage.getItem(RATINGS_KEY)
       if (savedRatings) ratings.value = JSON.parse(savedRatings)
     } catch {
       // 忽略
+    }
+
+    // 首次使用：自动添加默认社区仓库
+    if (repos.value.length === 0) {
+      repos.value = [{ id: DEFAULT_REPO, name: 'SuperTools Community' }]
+      save()
     }
   }
 
