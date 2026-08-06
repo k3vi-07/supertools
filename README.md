@@ -131,43 +131,214 @@ defineAsyncComponent + <Suspense> 渲染
 
 | 仓库 | 工具数 | 说明 |
 |------|--------|------|
-| [k3vi-07/supertools-community](https://github.com/k3vi-07/supertools-community) | 31 | 官方社区工具集 |
+| [k3vi-07/supertools-community](https://github.com/k3vi-07/supertools-community) | 51 | 官方社区工具集 |
 
 ### 创建自己的远程工具仓库
 
+#### 1. 初始化仓库
+
+```bash
+mkdir my-supertools-plugins && cd my-supertools-plugins
+git init
+mkdir tools
+```
+
+#### 2. 编写 registry.json
+
+这是工具清单文件，描述仓库中所有工具的元数据：
+
 ```json
-// registry.json
 {
   "name": "我的工具集",
-  "tools": [{
-    "id": "my-tool",
-    "name": "My Tool",
-    "nameZh": "我的工具",
-    "icon": "mdi:tools",
-    "category": ["text"],
-    "keywords": ["my", "tool"],
-    "description": "工具描述",
-    "path": "tools/MyTool.vue"
-  }]
+  "description": "我的自定义工具集合",
+  "version": "v1.0.0",
+  "tools": [
+    {
+      "id": "my-tool",
+      "name": "My Tool",
+      "nameZh": "我的工具",
+      "icon": "mdi:tools",
+      "category": ["text"],
+      "keywords": ["my", "tool", "工具"],
+      "description": "一个示例工具",
+      "path": "tools/MyTool.vue",
+      "author": "your-name",
+      "version": "v1.0.0"
+    }
+  ]
 }
 ```
 
+**字段说明：**
+
+| 字段 | 必填 | 说明 |
+|------|------|------|
+| `id` | ✅ | 工具唯一标识（英文 kebab-case，如 `my-tool`） |
+| `name` | ✅ | 英文名称 |
+| `nameZh` | ✅ | 中文名称 |
+| `icon` | ✅ | [Material Design Icons](https://pictogrammers.com/library/mdi/) 图标名（`mdi:` 前缀） |
+| `category` | ✅ | 分类数组，可选值见下表 |
+| `keywords` | ✅ | 搜索关键词数组 |
+| `description` | ✅ | 工具描述 |
+| `path` | ✅ | `.vue` 文件相对路径（从仓库根目录开始） |
+| `author` | ❌ | 作者名 |
+| `version` | ❌ | 工具版本号 |
+
+**可选分类：**
+
+| 分类 ID | 名称 |
+|---------|------|
+| `encode` | 编码解码 |
+| `json` | JSON |
+| `cryptography` | 加密哈希 |
+| `text` | 文本处理 |
+| `web` | 前端开发 |
+| `color` | 颜色 |
+| `datetime` | 时间日期 |
+| `programming` | 编程工具 |
+| `network` | 网络工具 |
+
+#### 3. 编写工具组件（.vue 文件）
+
+工具是一个标准的 Vue 3 单文件组件。**注意：远程工具在浏览器端运行时编译，不能 `import` npm 包**，只能使用 Vue 内置 API 和全局注册的 `h-` 组件。
+
+##### 模式一：输入→输出转换（使用 `<h-transform>`）
+
+适合编码/解码/格式化类工具，自带双栏编辑器、复制、反转按钮：
+
 ```vue
-<!-- tools/MyTool.vue -->
 <template>
   <h-single-layout>
-    <h-text-transform :transform="myFn" />
+    <h-transform
+      left-title="输入"
+      right-title="输出"
+      :sample-data="sample"
+      :input-handler="transformFn"
+    />
   </h-single-layout>
 </template>
 
 <script setup lang="ts">
-function myFn(input: string): string {
+// 示例数据，用户打开工具时预填
+const sample = 'Hello World'
+
+// 转换函数：输入 string，返回 string
+function transformFn(input: string): string {
   return input.toUpperCase()
 }
 </script>
 ```
 
-推送到 GitHub 后，任何人都可以通过仓库地址安装你的工具。
+##### 模式二：自定义布局（使用 `<h-single-layout>`）
+
+适合需要自定义 UI 的工具（计算器、生成器等）：
+
+```vue
+<template>
+  <h-single-layout>
+    <div class="my-tool">
+      <div class="my-tool__input">
+        <input v-model="input" placeholder="输入内容..." @input="process" />
+      </div>
+      <div class="my-tool__output selectable">{{ output }}</div>
+      <button @click="copy">复制结果</button>
+    </div>
+  </h-single-layout>
+</template>
+
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const input = ref('')
+const output = ref('')
+
+function process() {
+  output.value = input.value.split('').reverse().join('')
+}
+
+function copy() {
+  window.$he3?.copyText(output.value)
+  window.$he3?.message.success('已复制')
+}
+</script>
+
+<style scoped>
+.my-tool { display: flex; flex-direction: column; gap: 12px; }
+.my-tool__input input {
+  width: 100%; padding: 8px 12px;
+  border: 1px solid var(--border-color); border-radius: 8px;
+  background: var(--bg-surface); color: var(--text-primary);
+}
+.my-tool__output {
+  padding: 12px; border-radius: 8px;
+  background: var(--bg-surface); min-height: 60px;
+}
+</style>
+```
+
+#### 4. 可用的全局组件
+
+| 组件 | 说明 | 常用 Props |
+|------|------|-----------|
+| `<h-single-layout>` | 单栏居中布局容器 | 无 |
+| `<h-transform>` | 双栏输入→输出转换 | `:input-handler` (函数), `:sample-data` (示例), `left-title`, `right-title` |
+| `<h-text-transform>` | 纯文本转换 | `:transform` (函数), `:reverse-transform` (反转函数) |
+| `<h-code-editor>` | 代码编辑器 | `v-model`, `language` |
+| `<h-button>` | 按钮 | `type`, `size`, `icon` |
+| `<h-input>` | 输入框 | `v-model`, `placeholder` |
+| `<h-select>` | 下拉选择 | `v-model`, `:options` |
+| `<h-radio>` | 单选组 | `v-model`, `:options` |
+| `<h-switch>` | 开关 | `v-model` |
+| `<h-checkbox>` | 复选框 | `v-model` |
+| `<h-icon>` | 图标 | `icon`, `size`, `color` |
+| `<h-card-box>` | 卡片容器 | `text`, `icon` |
+
+#### 5. 可用的 API（`window.$he3`）
+
+```typescript
+// 剪贴板
+window.$he3.copyText('文本')              // 复制到剪贴板
+await window.$he3.getLastClipboard()      // 获取剪贴板内容
+
+// 消息提示
+window.$he3.message.success('成功')       // ✅ 绿色提示
+window.$he3.message.error('失败')         // ❌ 红色提示
+
+// 打开外部链接
+window.$he3.shellOpenExternal('https://...')
+```
+
+#### 6. 可用的 CSS 变量（主题适配）
+
+工具样式应使用 CSS 变量，自动适配深色/浅色模式：
+
+```css
+color: var(--text-primary);       /* 主文字 */
+color: var(--text-secondary);     /* 次要文字 */
+color: var(--text-tertiary);      /* 辅助文字 */
+background: var(--bg-surface);    /* 卡片背景 */
+background: var(--bg-base);       /* 页面背景 */
+border: 1px solid var(--border-color);
+color: var(--color-primary);      /* 主题色 */
+border-radius: var(--radius-sm);  /* 圆角 */
+```
+
+#### 7. 推送到 GitHub
+
+```bash
+git add .
+git commit -m "feat: 我的工具集"
+git push
+```
+
+推送后，任何人都可以在 SuperTools 工具商店输入你的仓库地址（如 `your-name/my-supertools-plugins`）安装工具。
+
+#### ⚠️ 注意事项
+
+- **不能 import npm 包**：远程工具通过 vue3-sfc-loader 在浏览器端编译，无法访问 node_modules。需要加密功能请使用浏览器原生 [Web Crypto API](https://developer.mozilla.org/docs/Web/API/Web_Crypto_API)
+- **使用 `<script setup>`**：推荐使用 Composition API + `<script setup>` 语法
+- **纯前端运行**：工具运行在渲染进程，没有 Node.js 环境
+- **MDI 图标**：图标名从 [Material Design Icons](https://pictogrammers.com/library/mdi/) 查找，使用 `mdi:` 前缀
 
 ## 🏗️ 项目结构
 
