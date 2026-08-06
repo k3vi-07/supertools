@@ -7,7 +7,7 @@
           v-for="port in filteredPorts"
           :key="port.port"
           class="port-cheatsheet__item"
-          :class="{ 'port-cheatsheet__item--tcp': port.tcp }"
+          :class="{ 'port-cheatsheet__item--tcp': port.proto.includes('TCP') }"
           @click="copy(port.port)"
         >
           <span class="port-cheatsheet__num">{{ port.port }}</span>

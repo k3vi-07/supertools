@@ -30,7 +30,7 @@ const justifyOpts = [{ label: 'flex-start', value: 'flex-start' }, { label: 'cen
 const alignOpts = [{ label: 'flex-start', value: 'flex-start' }, { label: 'center', value: 'center' }, { label: 'flex-end', value: 'flex-end' }, { label: 'stretch', value: 'stretch' }]
 const wrapOpts = [{ label: 'nowrap', value: 'nowrap' }, { label: 'wrap', value: 'wrap' }, { label: 'wrap-reverse', value: 'wrap-reverse' }]
 
-const flexStyle = computed(() => ({
+const flexStyle = computed<Record<string, string>>(() => ({
   flexDirection: opt.direction,
   justifyContent: opt.justify,
   alignItems: opt.align,

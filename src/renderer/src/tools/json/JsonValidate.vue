@@ -30,7 +30,7 @@
         </div>
         <div class="json-validate__stat">
           <span class="json-validate__stat-label">大小</span>
-          <span class="json-validate__stat-value">{{ formatBytes(new Blob([input]).size) }}</span>
+          <span class="json-validate__stat-value">{{ formatBytes(byteSize(input)) }}</span>
         </div>
       </div>
     </div>
@@ -67,6 +67,10 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024) return bytes + ' B'
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB'
   return (bytes / (1024 * 1024)).toFixed(2) + ' MB'
+}
+
+function byteSize(value: string): number {
+  return new window.TextEncoder().encode(value).byteLength
 }
 </script>
 

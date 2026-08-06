@@ -31,7 +31,7 @@ import { ref, computed } from 'vue'
 
 const url = ref('https://admin:secret@supertools.app:8443/api/v1/tools?category=json&limit=10#results')
 
-const fields = [
+const fields: Array<{ key: Exclude<keyof ParsedUrl, 'params'>; label: string }> = [
   { key: 'protocol', label: '协议' },
   { key: 'username', label: '用户名' },
   { key: 'password', label: '密码' },
@@ -43,7 +43,9 @@ const fields = [
   { key: 'origin', label: 'Origin' }
 ]
 
-const parsed = computed(() => {
+type ParsedUrl = { protocol: string; username: string; password: string; hostname: string; port: string; pathname: string; search: string; hash: string; origin: string; params: Record<string, string> }
+
+const parsed = computed<ParsedUrl | null>(() => {
   try {
     const u = new URL(url.value)
     const params: Record<string, string> = {}

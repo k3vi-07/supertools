@@ -43,7 +43,7 @@ function replaceFn(input: string): string {
     const pattern = useRegex.value ? find.value : find.value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const regex = new RegExp(pattern, flags)
     return input.replace(regex, () => {
-      replaceCount.value++
+      replaceCount.value = (replaceCount.value ?? 0) + 1
       return replace.value
     })
   } catch (err) {

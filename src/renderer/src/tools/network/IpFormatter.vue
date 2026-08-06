@@ -13,7 +13,7 @@
           <div v-if="info.type === 'IPv4'" class="ip-formatter__row"><span>二进制</span><span class="selectable">{{ info.binary }}</span></div>
           <div v-if="info.type === 'IPv4'" class="ip-formatter__row"><span>八进制</span><span class="selectable">{{ info.octal }}</span></div>
           <div v-if="info.type === 'IPv4'" class="ip-formatter__row"><span>反向 DNS</span><span class="selectable">{{ info.reverseDns }}</span></div>
-          <div v-if="info.isPrivate" class="ip-formatter__row"><span>类别</span><span>私有地址</span></div>
+          <div v-if="info.type === 'IPv4' && info.isPrivate" class="ip-formatter__row"><span>类别</span><span>私有地址</span></div>
         </div>
       </h-card-box>
     </div>

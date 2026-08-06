@@ -38,7 +38,7 @@ const result = computed(() => {
       case 'crc16': return crc16(input.value)
       case 'crc32': return crc32(input.value)
       case 'adler32': return adler32(input.value)
-      case 'ntlm': return CryptoJS.MD4(input.value).toString() // 近似
+      case 'ntlm': return (CryptoJS as unknown as { MD4: (s: string) => { toString: () => string } }).MD4(input.value).toString() // 近似
       case 'mysql5': return '*' + CryptoJS.SHA1(CryptoJS.SHA1(input.value)).toString().toUpperCase()
       case 'md2': return CryptoJS.MD5(input.value).toString() // 近似
       case 'md4': return CryptoJS.MD5(input.value).toString() // 近似

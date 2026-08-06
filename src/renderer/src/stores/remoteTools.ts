@@ -294,7 +294,8 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
   function updateTool(toolId: string): void {
     const outdated = outdatedTools.value.find((t) => t.toolId === toolId)
     if (!outdated) return
-    installTool(outdated.entry, outdated.entry.path ? guessRepoFromEntry(outdated.entry) : '')
+    const installed = installedTools.value.find((t) => t.id === toolId)
+    if (installed) installTool(outdated.entry, installed.sourceRepo)
   }
 
   /** 更新所有过期工具 */
@@ -309,11 +310,6 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
     }
     outdatedTools.value = []
     return count
-  }
-
-  /** 从 entry 的 path 猜测仓库（辅助函数，不常用） */
-  function guessRepoFromEntry(_entry: RemoteToolEntry): string {
-    return ''
   }
 
   /** 判断工具是否有更新 */

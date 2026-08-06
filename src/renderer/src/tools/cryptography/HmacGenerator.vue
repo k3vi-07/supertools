@@ -41,11 +41,17 @@ import CryptoJS from 'crypto-js'
 const algorithm = ref<'MD5' | 'SHA1' | 'SHA256' | 'SHA512'>('SHA256')
 const key = ref('my-secret-key')
 const message = ref('Hello SuperTools!')
+const hmacFunctions = {
+  MD5: CryptoJS.HmacMD5,
+  SHA1: CryptoJS.HmacSHA1,
+  SHA256: CryptoJS.HmacSHA256,
+  SHA512: CryptoJS.HmacSHA512
+} as const
 
 const result = computed(() => {
   if (!key.value || !message.value) return ''
   try {
-    return CryptoJS.Hmac[algorithm.value](message.value, key.value).toString()
+    return hmacFunctions[algorithm.value](message.value, key.value).toString()
   } catch {
     return 'Error'
   }

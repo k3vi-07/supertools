@@ -482,7 +482,12 @@ function setupIpcHandlers(): void {
 
   // 用系统浏览器打开 URL
   ipcMain.handle(IPC_CHANNELS.SHELL_OPEN_EXTERNAL, (_event, url: string): Promise<void> => {
-    return shell.openExternal(url)
+    let parsed: URL
+    try { parsed = new URL(url) } catch { return Promise.reject(new Error('无效的外部链接')) }
+    if (!['http:', 'https:', 'mailto:'].includes(parsed.protocol)) {
+      return Promise.reject(new Error('不支持的链接协议'))
+    }
+    return shell.openExternal(parsed.toString())
   })
 
   // 获取平台信息

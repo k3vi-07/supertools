@@ -7,7 +7,7 @@
         <span>{{ t('settings.darkMode') }}</span>
         <h-switch
           :model-value="settingsStore.theme === 'dark'"
-          @update:model-value="(val) => settingsStore.setTheme(val ? 'dark' : 'light')"
+          @update:model-value="(val: boolean) => settingsStore.setTheme(val ? 'dark' : 'light')"
         />
       </div>
     </h-card-box>
@@ -21,7 +21,7 @@
             { label: '中文', value: 'zh' },
             { label: 'English', value: 'en' }
           ]"
-          @update:model-value="(val) => settingsStore.setLang(val as 'zh' | 'en')"
+          @update:model-value="(val: unknown) => settingsStore.setLang(val as 'zh' | 'en')"
         />
       </div>
     </h-card-box>
