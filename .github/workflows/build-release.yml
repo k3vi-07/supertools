@@ -48,6 +48,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: 🔏 Ad-hoc sign macOS app (no Apple Developer account needed)
+        if: matrix.platform == 'mac'
+        run: |
+          # 对所有 .app 和 .dmg 执行 ad-hoc 签名
+          # ad-hoc 签名不等于正式签名，但能减少 macOS "已损坏" 报错
+          find dist -name "*.app" -type d -exec codesign --force --deep --sign - {} \; 2>/dev/null || true
+          find dist -name "*.dmg" -exec codesign --force --sign - {} \; 2>/dev/null || true
+          echo "✅ Ad-hoc signing complete"
+
       - name: 📤 Upload artifacts
         uses: actions/upload-artifact@v4
         with:

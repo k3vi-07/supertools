@@ -60,6 +60,19 @@ npm run build:win
 npm run build:linux
 ```
 
+### macOS 安装须知
+
+由于没有 Apple 开发者签名，macOS 下载后可能提示「已损坏，无法打开」或「无法验证开发者」。解决方法：
+
+```bash
+# 方法一：终端解除隔离属性（推荐）
+xattr -cr /Applications/SuperTools.app
+
+# 方法二：系统偏好设置 → 安全性与隐私 → 允许打开
+```
+
+> 这是未签名开源应用的常见问题，应用本身安全，代码完全开源可审查。
+
 ## ⌨️ 快捷键
 
 | 功能 | macOS | Windows / Linux |
