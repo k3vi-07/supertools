@@ -23,6 +23,10 @@ jobs:
             platform: win
             artifact: SuperTools Setup *.exe
             name: Windows (x64)
+          - os: ubuntu-latest
+            platform: linux
+            artifact: SuperTools-*.AppImage
+            name: Linux (x64)
 
     steps:
       - name: 📥 Checkout
@@ -39,6 +43,9 @@ jobs:
 
       - name: 🎨 Generate app icon
         run: node scripts/generate-icon.mjs
+
+      - name: 🔍 Validate manifests (pre-build check)
+        run: npm run validate
 
       - name: 🔨 Build with electron-vite
         run: npx electron-vite build
@@ -65,6 +72,7 @@ jobs:
             dist/*.dmg
             dist/*.exe
             dist/*.zip
+            dist/*.AppImage
             dist/*.yml
           retention-days: 30
 
@@ -79,6 +87,7 @@ jobs:
             dist/*.dmg
             dist/*.exe
             dist/*.zip
+            dist/*.AppImage
             dist/*.yml
           draft: false
           prerelease: false

@@ -20,6 +20,9 @@
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "validate": "node scripts/validate-manifests.mjs",
+    "validate:registry": "node scripts/validate-registry.mjs",
+    "validate:all": "npm run validate && npm run validate:registry && npm run typecheck",
     "build:mac": "electron-vite build && electron-builder --mac",
     "build:win": "electron-vite build && electron-builder --win",
     "build:linux": "electron-vite build && electron-builder --linux"
