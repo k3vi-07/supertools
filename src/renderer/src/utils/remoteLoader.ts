@@ -38,9 +38,8 @@ const moduleCache: Record<string, unknown> = {
 // 覆盖 Vue.resolveComponent — 让远程组件能解析全局注册的 h-xxx 组件
 // vue3-sfc-loader 编译的远程组件 render 函数中会调用 resolveComponent("h-xxx")
 // 但远程组件不继承 Vue app 的全局组件注册，导致返回 undefined → 页面空白
-// Proxy 包装 moduleCache.vue 无效（Vite 构建时 vue 已被内联到 sfc-loader）
-// 注意：ESM 导入的属性是只读的（开发模式下），直接赋值会报 TypeError
-// 使用 Object.defineProperty 可以绕过只读限制
+// 注意：ESM 导入的属性是只读的，esbuild 依赖扫描阶段会拒绝直接赋值
+// 用函数包裹避免静态分析报错，运行时 try-catch 安全降级
 const _origResolve = Vue.resolveComponent
 const _patchedResolve = (name: string): unknown => {
   const resolved = _origResolve(name)
@@ -49,21 +48,26 @@ const _patchedResolve = (name: string): unknown => {
   if (globalComponents[kebab]) return globalComponents[kebab]
   return name
 }
-try {
-  // 生产模式：直接赋值（Vite 内联 Vue 后属性可写）
-  ;(Vue as Record<string, unknown>).resolveComponent = _patchedResolve
-} catch {
-  // 开发模式：ESM 导入属性只读，尝试 defineProperty
+
+/** 运行时 patch resolveComponent（避免 esbuild 静态分析报错） */
+function patchResolveComponent(): void {
   try {
-    Object.defineProperty(Vue, 'resolveComponent', {
-      value: _patchedResolve,
-      writable: true,
-      configurable: true
-    })
+    // 生产模式：Vite 内联 Vue 后属性可写
+    ;(Vue as Record<string, unknown>).resolveComponent = _patchedResolve
   } catch {
-    // ESM 属性也不可配置，静默跳过，靠 componentDef.components 注入兜底
+    // 开发模式：ESM 属性只读，尝试 defineProperty
+    try {
+      Object.defineProperty(Vue, 'resolveComponent', {
+        value: _patchedResolve,
+        writable: true,
+        configurable: true
+      })
+    } catch {
+      // ESM 属性也不可配置，静默跳过，靠 componentDef.components 注入兜底
+    }
   }
 }
+patchResolveComponent()
 
 /** 内存缓存：避免同一 session 内重复读磁盘 */
 const memoryCache = new Map<string, string>()
