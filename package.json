@@ -1,7 +1,7 @@
 {
   "name": "supertools",
-  "version": "1.4.1",
-  "description": "SuperTools - 开发者超级工具箱，灵感来自 He3 | 136+ 内置工具 + 远程插件系统",
+  "version": "1.4.2",
+  "description": "SuperTools - 开发者超级工具箱 | 136+ 内置工具 + 远程插件系统",
   "main": "./out/main/index.js",
   "author": "k3vi-07",
   "license": "MIT",
