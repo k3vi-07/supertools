@@ -468,6 +468,7 @@ window.$he3.shellOpenExternal(url) // 打开浏览器
 
 ## 🙏 致谢
 
+- [He3](https://he3.app) - 原始工具箱设计灵感
 - [Electron](https://www.electronjs.org/) — 跨平台桌面框架
 - [Vue.js](https://vuejs.org/) — 渐进式前端框架
 - [jsDelivr](https://www.jsdelivr.com/) — 开源 CDN 服务
