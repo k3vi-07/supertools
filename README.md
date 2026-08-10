@@ -11,8 +11,9 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 [![Tools](https://img.shields.io/badge/Built--in_Tools-136-7c3aed)](#-内置工具136-个)
+[![Website](https://img.shields.io/badge/Website-supertools.app-d4943e?style=flat)](https://k3vi-07.github.io/supertools/)
 
-灵感来自 [He3](https://he3.app)，基于 Electron + Vue 3 + TypeScript 构建的跨平台开发者工具箱桌面应用。
+基于 Electron + Vue 3 + TypeScript 构建的跨平台开发者工具箱桌面应用。
 
 </div>
 
