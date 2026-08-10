@@ -7,18 +7,18 @@
 <meta name="description" content="136+ 内置工具 · 远程插件系统 · 智能搜索 · 剪贴板识别。基于 Electron + Vue 3 + TypeScript 构建的跨平台开发者工具箱。">
 <style>
 :root {
-  --bg: #0f0f1e;
-  --bg-card: #1a1a2e;
-  --bg-hover: #16213e;
-  --primary: #6366f1;
-  --primary-glow: rgba(99, 102, 241, 0.3);
-  --text: #e2e8f0;
-  --text-dim: #94a3b8;
-  --text-faint: #64748b;
-  --border: rgba(255, 255, 255, 0.08);
-  --success: #22c55e;
-  --warning: #f59e0b;
-  --radius: 16px;
+  --bg: #15140f;
+  --bg-card: #1e1c16;
+  --bg-hover: #26231a;
+  --primary: #d4943e;
+  --primary-soft: rgba(212, 148, 62, 0.12);
+  --text: #ebe6dd;
+  --text-dim: #a39c8e;
+  --text-faint: #6e6759;
+  --border: rgba(240, 230, 210, 0.08);
+  --success: #7cb069;
+  --warning: #e0a04b;
+  --radius: 14px;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
@@ -34,16 +34,16 @@ body {
 .hero {
   text-align: center;
   padding: 100px 24px 80px;
-  background: radial-gradient(ellipse at top, var(--primary-glow), transparent 60%);
+  border-bottom: 1px solid var(--border);
 }
 .hero__logo { font-size: 72px; margin-bottom: 16px; }
 .hero__title {
   font-size: 56px; font-weight: 800;
-  background: linear-gradient(135deg, #818cf8, #6366f1, #a78bfa);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  color: var(--text);
+  letter-spacing: -1px;
   margin-bottom: 12px;
 }
-.hero__subtitle { font-size: 22px; color: var(--text-dim); margin-bottom: 8px; }
+.hero__subtitle { font-size: 22px; color: var(--primary); margin-bottom: 8px; font-weight: 500; }
 .hero__tagline { font-size: 16px; color: var(--text-faint); margin-bottom: 40px; }
 .hero__badges { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 40px; }
 .badge {
@@ -57,10 +57,10 @@ body {
   padding: 14px 32px; border-radius: 12px; font-size: 16px; font-weight: 600;
   text-decoration: none; transition: all 0.2s; cursor: pointer; border: none;
 }
-.btn--primary { background: var(--primary); color: #fff; }
-.btn--primary:hover { transform: translateY(-2px); box-shadow: 0 8px 24px var(--primary-glow); }
+.btn--primary { background: var(--primary); color: #1a1814; }
+.btn--primary:hover { transform: translateY(-2px); box-shadow: 0 8px 24px var(--primary-soft); }
 .btn--secondary { background: var(--bg-card); color: var(--text); border: 1px solid var(--border); }
-.btn--secondary:hover { background: var(--bg-hover); transform: translateY(-2px); }
+.btn--secondary:hover { background: var(--bg-hover); transform: translateY(-2px); border-color: var(--primary); }
 
 /* Stats */
 .stats {
@@ -73,8 +73,7 @@ body {
 }
 .stat__num {
   font-size: 42px; font-weight: 800;
-  background: linear-gradient(135deg, #818cf8, #a78bfa);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  color: var(--primary);
 }
 .stat__label { font-size: 14px; color: var(--text-faint); margin-top: 4px; }
 
@@ -122,13 +121,14 @@ body {
 .category__items { display: flex; flex-wrap: wrap; gap: 6px; }
 .category__item {
   font-size: 12px; padding: 4px 10px; border-radius: 6px;
-  background: rgba(99, 102, 241, 0.1); color: var(--text-dim);
+  background: var(--primary-soft); color: var(--text-dim);
 }
 
 /* Download */
 .download {
   text-align: center; padding: 80px 24px;
-  background: radial-gradient(ellipse at center, var(--primary-glow), transparent 70%);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
 }
 .download__platforms { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin-top: 32px; }
 .platform {
@@ -137,13 +137,14 @@ body {
   border: 1px solid var(--border); text-decoration: none; color: var(--text);
   transition: all 0.2s; min-width: 180px;
 }
-.platform:hover { transform: translateY(-4px); border-color: var(--primary); }
+.platform:hover { transform: translateY(-4px); border-color: var(--primary); background: var(--bg-hover); }
 .platform__icon { font-size: 40px; }
 .platform__name { font-size: 16px; font-weight: 600; }
 .platform__hint { font-size: 12px; color: var(--text-faint); }
 .download__note {
   margin-top: 32px; padding: 16px 24px; border-radius: 12px;
-  background: rgba(245, 158, 11, 0.1); color: var(--warning);
+  background: rgba(224, 160, 75, 0.08); color: var(--warning);
+  border: 1px solid rgba(224, 160, 75, 0.2);
   font-size: 14px; max-width: 600px; margin-left: auto; margin-right: auto;
   text-align: left;
 }
@@ -244,7 +245,7 @@ body {
 </section>
 
 <!-- Screenshots -->
-<section class="section" style="background: rgba(0,0,0,0.15);">
+<section class="section" style="background: rgba(0,0,0,0.12); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
   <div class="container">
     <h2 class="section__title">界面预览</h2>
     <p class="section__desc">简洁、高效、专业的开发者工具界面</p>
