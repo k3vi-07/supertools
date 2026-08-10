@@ -29,7 +29,7 @@ const isOverlayMode = computed((): boolean => route.name === 'search')
 
 onMounted(() => {
   // 初始化主题
-  const savedTheme = localStorage.getItem('theme') || 'dark'
+  const savedTheme = localStorage.getItem('supertools:theme') || 'dark'
   document.documentElement.setAttribute('data-theme', savedTheme)
 
   // 监听导航事件（从搜索浮层触发）

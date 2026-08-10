@@ -69,7 +69,7 @@ const he3Api: He3API = {
   },
 
   get lang(): 'zh' | 'en' {
-    return (localStorage.getItem('lang') as 'zh' | 'en') || 'zh'
+    return (localStorage.getItem('supertools:lang') as 'zh' | 'en') || 'zh'
   },
 
   get isMacOS(): boolean {

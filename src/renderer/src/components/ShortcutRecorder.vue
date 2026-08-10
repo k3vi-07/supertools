@@ -44,6 +44,7 @@
 <script setup lang="ts">
 import { ref, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { formatShortcut } from '../utils/shortcut'
 
 const { t } = useI18n()
 
@@ -59,20 +60,6 @@ const emit = defineEmits<{
 
 const recording = ref(false)
 const error = ref('')
-
-/** 格式化快捷键显示 */
-function formatShortcut(acc: string): string {
-  if (!acc) return ''
-  const isMac = navigator.platform.toUpperCase().includes('MAC')
-  return acc
-    .replace(/Command\+/g, isMac ? '⌘+' : 'Ctrl+')
-    .replace(/Cmd\+/g, isMac ? '⌘+' : 'Ctrl+')
-    .replace(/Control\+/g, 'Ctrl+')
-    .replace(/Option\+/g, isMac ? '⌥+' : 'Alt+')
-    .replace(/Alt\+/g, isMac ? '⌥+' : 'Alt+')
-    .replace(/Shift\+/g, isMac ? '⇧+' : 'Shift+')
-    .replace(/\+/g, ' + ')
-}
 
 /** 开始录制 */
 function startRecording(): void {

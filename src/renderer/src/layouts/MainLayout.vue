@@ -112,56 +112,25 @@ import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter, RouterLink, RouterView } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useSettingsStore } from '../stores/settings'
-import { useFavoritesStore } from '../stores/favorites'
-import { useHistoryStore } from '../stores/history'
 import { useRemoteToolsStore } from '../stores/remoteTools'
 import SearchModal from '../components/SearchModal.vue'
+import { formatShortcutHint, matchesShortcut } from '../utils/shortcut'
 
 const router = useRouter()
 const { t } = useI18n()
 const settingsStore = useSettingsStore()
-const favoritesStore = useFavoritesStore()
-const historyStore = useHistoryStore()
 const remoteToolsStore = useRemoteToolsStore()
 
 /** 已安装远程工具数量 */
 const remoteCount = computed(() => remoteToolsStore.installedTools.length)
 
-const shortcutHint = computed(() => {
-  const acc = settingsStore.appSearchShortcut
-  if (!acc) return ''
-  const isMac = navigator.platform.toUpperCase().includes('MAC')
-  return acc
-    .replace(/Command\+/g, isMac ? '⌘+' : 'Ctrl+')
-    .replace(/Ctrl\+/g, 'Ctrl+')
-    .replace(/Option\+/g, isMac ? '⌥+' : 'Alt+')
-    .replace(/Alt\+/g, isMac ? '⌥+' : 'Alt+')
-    .replace(/Shift\+/g, isMac ? '⇧+' : 'Shift+')
-    .replace(/\+/g, '')
-})
+const shortcutHint = computed(() => formatShortcutHint(settingsStore.appSearchShortcut))
 
 /** 弹出式搜索可见性 */
 const searchVisible = ref(false)
 
 function focusSearch(): void {
   searchVisible.value = true
-}
-
-/** 检查按键是否匹配快捷键 */
-function matchesShortcut(e: KeyboardEvent, accelerator: string): boolean {
-  if (!accelerator) return false
-  const parts = accelerator.split('+')
-  const needCtrl = parts.includes('Ctrl')
-  const needCmd = parts.includes('Command')
-  const needAlt = parts.includes('Alt')
-  const needShift = parts.includes('Shift')
-  const key = parts[parts.length - 1].toLowerCase()
-
-  if (needCtrl !== e.ctrlKey) return false
-  if (needCmd !== e.metaKey) return false
-  if (needAlt !== e.altKey) return false
-  if (needShift !== e.shiftKey) return false
-  return e.key.toLowerCase() === key
 }
 
 // 全局快捷键监听（从设置读取）
@@ -177,9 +146,7 @@ function handleKeyDown(e: KeyboardEvent): void {
 let navHandler: ((toolId: string) => void) | null = null
 
 onMounted(() => {
-  favoritesStore.init()
-  historyStore.init()
-  // remoteToolsStore.init() 已在 main.ts 中调用，此处不再重复初始化
+  // 所有 store init 已在 main.ts 中统一完成
   document.addEventListener('keydown', handleKeyDown)
 
   // 暴露 router 给 App.vue 用于导航

@@ -1,9 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { Theme, Lang } from '@shared/types'
-
-const THEME_KEY = 'supertools:theme'
-const LANG_KEY = 'supertools:lang'
+import { storageGet, storageSet } from '../utils/storage'
 
 /** 默认快捷键 */
 const DEFAULT_SHORTCUTS = {
@@ -23,11 +21,11 @@ export const useSettingsStore = defineStore('settings', () => {
 
   function init(): void {
     // 加载主题
-    const savedTheme = (localStorage.getItem(THEME_KEY) as Theme) || 'dark'
+    const savedTheme = storageGet('theme', 'dark') as Theme
     setTheme(savedTheme)
 
     // 加载语言
-    const savedLang = (localStorage.getItem(LANG_KEY) as Lang) || 'zh'
+    const savedLang = storageGet('lang', 'zh') as Lang
     setLang(savedLang)
 
     // 从主进程加载快捷键配置
@@ -82,7 +80,7 @@ export const useSettingsStore = defineStore('settings', () => {
   function setTheme(newTheme: Theme): void {
     theme.value = newTheme
     document.documentElement.setAttribute('data-theme', newTheme)
-    localStorage.setItem(THEME_KEY, newTheme)
+    storageSet('theme', newTheme)
   }
 
   function toggleTheme(): void {
@@ -91,7 +89,7 @@ export const useSettingsStore = defineStore('settings', () => {
 
   function setLang(newLang: Lang): void {
     lang.value = newLang
-    localStorage.setItem(LANG_KEY, newLang)
+    storageSet('lang', newLang)
   }
 
   return {

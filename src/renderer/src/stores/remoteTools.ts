@@ -4,10 +4,7 @@ import type { RemoteToolEntry, RemoteRegistry } from '@shared/types'
 import type { ToolManifest } from '../tools/types'
 import { createRemoteComponentLoader, precacheRemoteComponent, evictRemoteComponentCache } from '../utils/remoteLoader'
 import { validateRegistry } from '../utils/registryValidator'
-
-const INSTALLED_KEY = 'supertools:installed-remote-tools'
-const REPOS_KEY = 'supertools:remote-repos'
-const RATINGS_KEY = 'supertools:tool-ratings'
+import { storageGetJSON, storageSetJSON } from '../utils/storage'
 
 /** 已安装的远程工具（包含完整 manifest + 远程来源信息） */
 export interface InstalledRemoteTool extends RemoteToolEntry {
@@ -59,18 +56,9 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
 
   /** 初始化：从 localStorage 加载，首次使用自动添加默认仓库 */
   function init(): void {
-    try {
-      const savedRepos = localStorage.getItem(REPOS_KEY)
-      if (savedRepos) {
-        repos.value = JSON.parse(savedRepos)
-      }
-      const savedInstalled = localStorage.getItem(INSTALLED_KEY)
-      if (savedInstalled) installedTools.value = JSON.parse(savedInstalled)
-      const savedRatings = localStorage.getItem(RATINGS_KEY)
-      if (savedRatings) ratings.value = JSON.parse(savedRatings)
-    } catch {
-      // 忽略
-    }
+    repos.value = storageGetJSON<RemoteRepo[]>('remote-repos', [])
+    installedTools.value = storageGetJSON<InstalledRemoteTool[]>('installed-remote-tools', [])
+    ratings.value = storageGetJSON<Record<string, Rating>>('tool-ratings', {})
 
     // 首次使用：自动添加默认社区仓库
     if (repos.value.length === 0) {
@@ -118,9 +106,9 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
 
   /** 保存到 localStorage */
   function save(): void {
-    localStorage.setItem(REPOS_KEY, JSON.stringify(repos.value))
-    localStorage.setItem(INSTALLED_KEY, JSON.stringify(installedTools.value))
-    localStorage.setItem(RATINGS_KEY, JSON.stringify(ratings.value))
+    storageSetJSON('remote-repos', repos.value)
+    storageSetJSON('installed-remote-tools', installedTools.value)
+    storageSetJSON('tool-ratings', ratings.value)
   }
 
   /** 添加远程仓库 */

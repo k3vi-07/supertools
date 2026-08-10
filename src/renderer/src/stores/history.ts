@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { storageGetJSON, storageSetJSON } from '../utils/storage'
 
-const HISTORY_KEY = 'supertools:history'
 const MAX_HISTORY = 50
 
 interface HistoryEntry {
@@ -16,20 +16,13 @@ export const useHistoryStore = defineStore('history', () => {
 
   /** 初始化 */
   function init(): void {
-    try {
-      const stored = localStorage.getItem(HISTORY_KEY)
-      if (stored) {
-        const parsed = JSON.parse(stored) as Array<{ id: string; timestamp: number; useCount?: number }>
-        // 兼容旧数据：缺少 useCount 的补为 1
-        history.value = parsed.map((h) => ({
-          id: h.id,
-          timestamp: h.timestamp,
-          useCount: h.useCount ?? 1
-        }))
-      }
-    } catch {
-      // 忽略
-    }
+    const parsed = storageGetJSON<Array<{ id: string; timestamp: number; useCount?: number }>>('history', [])
+    // 兼容旧数据：缺少 useCount 的补为 1
+    history.value = parsed.map((h) => ({
+      id: h.id,
+      timestamp: h.timestamp,
+      useCount: h.useCount ?? 1
+    }))
   }
 
   /** 记录使用：递增使用次数 + 更新时间戳到最前 */
@@ -64,7 +57,7 @@ export const useHistoryStore = defineStore('history', () => {
   })
 
   function save(): void {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history.value))
+    storageSetJSON('history', history.value)
   }
 
   return {

@@ -7,6 +7,8 @@ import { allTools, mergeRemoteTools } from './tools'
 import { useToolsStore } from './stores/tools'
 import { useSettingsStore } from './stores/settings'
 import { useRemoteToolsStore } from './stores/remoteTools'
+import { useFavoritesStore } from './stores/favorites'
+import { useHistoryStore } from './stores/history'
 import { useUpdaterStore } from './stores/updater'
 import { i18n } from './i18n'
 import { setupIcons } from './utils/iconSetup'
@@ -60,23 +62,26 @@ app.use(i18n)
 // 注册全局 h- 组件
 registerComponents(app)
 
-// 初始化工具注册表
+// 初始化各 store（统一在 mount 前完成，避免 MainLayout 重复初始化）
 const toolsStore = useToolsStore()
-toolsStore.registerTools(allTools)
-
-// 初始化设置
 const settingsStore = useSettingsStore()
-settingsStore.init()
-
-// 初始化远程工具
 const remoteToolsStore = useRemoteToolsStore()
+const favoritesStore = useFavoritesStore()
+const historyStore = useHistoryStore()
+
+settingsStore.init()
 remoteToolsStore.init()
-// 合并已安装的远程工具
+favoritesStore.init()
+historyStore.init()
+
+// 合并远程工具后注册一次（无需先注册本地再重注册）
 mergeRemoteTools(remoteToolsStore.remoteToolManifests)
 toolsStore.registerTools(allTools)
 
-// 初始化自动更新
-const updaterStore = useUpdaterStore()
-updaterStore.init()
+// 延迟初始化自动更新（不阻塞首屏渲染）
+setTimeout(() => {
+  const updaterStore = useUpdaterStore()
+  updaterStore.init()
+}, 3000)
 
 app.mount('#app')
