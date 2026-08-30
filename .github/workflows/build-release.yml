@@ -50,7 +50,7 @@ jobs:
           - os: macos-latest
             platform: mac
             name: macOS
-            command: npx electron-builder --mac --config.mac.identity=-
+            command: npx electron-builder --mac
           - os: windows-latest
             platform: win
             name: Windows x64

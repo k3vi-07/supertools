@@ -1,5 +1,6 @@
 appId: com.k3vi07.supertools
 productName: SuperTools
+afterPack: scripts/after-pack-sign.cjs
 directories:
   buildResources: build
   output: dist
@@ -18,6 +19,7 @@ files:
 asarUnpack:
   - resources/**
 mac:
+  identity: null
   category: public.app-category.developer-tools
   target:
     - target: dmg
