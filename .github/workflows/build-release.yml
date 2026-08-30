@@ -50,15 +50,15 @@ jobs:
           - os: macos-latest
             platform: mac
             name: macOS
-            command: npx electron-builder --mac
+            command: npx electron-builder --mac --publish never
           - os: windows-latest
             platform: win
             name: Windows x64
-            command: npx electron-builder --win
+            command: npx electron-builder --win --publish never
           - os: ubuntu-latest
             platform: linux
             name: Linux x64
-            command: npx electron-builder --linux
+            command: npx electron-builder --linux --publish never
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -76,7 +76,6 @@ jobs:
       - name: Package ${{ matrix.name }}
         run: ${{ matrix.command }}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - name: Upload ${{ matrix.name }} artifacts
         uses: actions/upload-artifact@v4
