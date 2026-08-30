@@ -41,7 +41,7 @@ function error(msg) { console.error(colors.red('  ❌ ' + msg)); errorCount++ }
 function warn(msg) { console.warn(colors.yellow('  ⚠️  ' + msg)); warnCount++ }
 
 // 确定仓库路径
-const repoPath = process.argv[2] || join(__dirname, '..', '..', 'supertools-community')
+const repoPath = process.argv[2] || process.env.SUPERTOOLS_COMMUNITY_DIR || join(__dirname, '..', '..', 'supertools-community')
 const registryPath = join(repoPath, 'registry.json')
 const toolsDir = join(repoPath, 'tools')
 

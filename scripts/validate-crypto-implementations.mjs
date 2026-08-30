@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const community = resolve(process.cwd(), '../supertools-community/tools')
+const community = resolve(process.env.SUPERTOOLS_COMMUNITY_DIR || '../supertools-community', 'tools')
 const vectorTests = [
   readFileSync(resolve(process.cwd(), 'tests/cryptoStandards.test.ts'), 'utf8'),
   readFileSync(resolve(process.cwd(), 'tests/communityCipherVectors.test.ts'), 'utf8')

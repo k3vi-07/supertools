@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const toolsRoot = resolve(process.cwd(), '../supertools-community/tools')
+const toolsRoot = resolve(process.env.SUPERTOOLS_COMMUNITY_DIR || '../supertools-community', 'tools')
 
 function evaluate(file: string, setup: string, expression = 'output.value'): unknown {
   const source = readFileSync(resolve(toolsRoot, file), 'utf8')
