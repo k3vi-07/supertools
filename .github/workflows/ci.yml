@@ -10,10 +10,20 @@ jobs:
   quality-check:
     name: 质量检查
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPERTOOLS_COMMUNITY_DIR: ${{ github.workspace }}/supertools-community
 
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v4
+
+      - name: 📥 Checkout community plugins
+        uses: actions/checkout@v4
+        with:
+          repository: k3vi-07/supertools-community
+          ref: master
+          path: supertools-community
 
       - name: 🟢 Setup Node.js
         uses: actions/setup-node@v4
@@ -22,22 +32,16 @@ jobs:
           cache: npm
 
       - name: 📦 Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: 🎨 Generate app icon
         run: node scripts/generate-icon.mjs
 
-      - name: 🔍 Validate manifests
-        run: npm run validate
+      - name: 🔍 Validate manifests and community registry
+        run: npm run validate:all
 
       - name: 🧪 Run tests
         run: npm test
 
-      - name: 🔷 Type check (Node)
-        run: npm run typecheck:node
-
-      - name: 🔷 Type check (Web)
-        run: npm run typecheck:web
-
       - name: 🔨 Build
-        run: npx electron-vite build
+        run: npm run build
