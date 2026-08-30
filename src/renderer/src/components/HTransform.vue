@@ -27,6 +27,7 @@
         />
       </div>
     </div>
+    <p v-if="errorMessage" class="h-transform__error" role="alert">{{ errorMessage }}</p>
   </div>
 </template>
 
@@ -50,6 +51,7 @@ const props = withDefaults(
     sampleData?: string
     /** 自动回填条件 */
     autoFillInputCondition?: (str: string) => boolean | null
+    refreshKey?: unknown
   }>(),
   {
     modelValue: '',
@@ -62,12 +64,20 @@ const props = withDefaults(
     inputHandler: undefined,
     resultHandler: undefined,
     sampleData: '',
-    autoFillInputCondition: undefined
+    autoFillInputCondition: undefined,
+    refreshKey: undefined
   }
 )
 
 const inputValue = ref(props.modelValue || props.sampleData || '')
 const outputValue = ref('')
+const errorMessage = ref('')
+let requestSequence = 0
+
+function normalizeResult(result: string): string {
+  if (/^(Error:|❌)/.test(result)) throw new Error(result.replace(/^(Error:\s*|❌\s*)/, ''))
+  return result
+}
 
 const emit = defineEmits<{
   'update:modelValue': [value: string]
@@ -81,15 +91,20 @@ async function handleInputChange(value: string): Promise<void> {
   emit('change', value)
 
   if (props.inputHandler) {
+    const sequence = ++requestSequence
+    errorMessage.value = ''
     try {
       if (value.trim()) {
-        const result = await props.inputHandler(value)
-        outputValue.value = result
+        const result = normalizeResult(await props.inputHandler(value))
+        if (sequence === requestSequence) outputValue.value = result
       } else {
         outputValue.value = ''
       }
     } catch (err) {
-      outputValue.value = `Error: ${(err as Error).message}`
+      if (sequence === requestSequence) {
+        outputValue.value = ''
+        errorMessage.value = (err as Error).message || '转换失败'
+      }
     }
   }
 }
@@ -97,11 +112,16 @@ async function handleInputChange(value: string): Promise<void> {
 /** 执行转换 */
 async function transform(): Promise<void> {
   if (props.inputHandler && inputValue.value.trim()) {
+    const sequence = ++requestSequence
+    errorMessage.value = ''
     try {
-      const result = await props.inputHandler(inputValue.value)
-      outputValue.value = result
+      const result = normalizeResult(await props.inputHandler(inputValue.value))
+      if (sequence === requestSequence) outputValue.value = result
     } catch (err) {
-      outputValue.value = `Error: ${(err as Error).message}`
+      if (sequence === requestSequence) {
+        outputValue.value = ''
+        errorMessage.value = (err as Error).message || '转换失败'
+      }
     }
   }
 }
@@ -116,6 +136,8 @@ watch(
     }
   }
 )
+
+watch(() => props.refreshKey, () => void transform(), { deep: true })
 
 onMounted(async () => {
   // 初始转换
@@ -140,6 +162,7 @@ onMounted(async () => {
 defineExpose({
   inputValue,
   outputValue,
+  errorMessage,
   transform
 })
 </script>
@@ -151,6 +174,7 @@ defineExpose({
   gap: 0;
   flex: 1;
   overflow: hidden;
+  flex-wrap: wrap;
 
   &__left,
   &__right {
@@ -169,6 +193,17 @@ defineExpose({
     flex: 1;
     display: flex;
     overflow: hidden;
+  }
+
+  &__error {
+    flex-basis: 100%;
+    margin: 8px 0 0;
+    padding: 8px 10px;
+    border: 1px solid color-mix(in srgb, var(--color-error) 45%, var(--border-color));
+    border-radius: var(--radius-sm);
+    color: var(--color-error);
+    background: color-mix(in srgb, var(--color-error) 8%, transparent);
+    font-size: 12px;
   }
 }
 </style>

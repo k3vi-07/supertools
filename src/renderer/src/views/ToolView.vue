@@ -2,8 +2,8 @@
   <div class="tool-view">
     <!-- 工具头部 -->
     <div class="tool-view__header">
-      <button class="tool-view__back" @click="router.back()">
-        <h-icon icon="mdi:arrow-left" :size="18" />
+      <button type="button" class="tool-view__back" :aria-label="t('tool.back')" @click="router.back()">
+        <h-icon icon="mdi:arrow-left" :size="18" aria-hidden="true" />
       </button>
       <div class="tool-view__icon">
         <h-icon :icon="tool?.icon || 'mdi:tools'" :size="22" />
@@ -13,12 +13,23 @@
         <p class="tool-view__desc">{{ tool?.description }}</p>
       </div>
       <button
+        type="button"
         class="tool-view__fav-btn"
         :class="{ active: isFav }"
+        :aria-label="isFav ? t('tool.removeFavorite') : t('tool.addFavorite')"
+        :aria-pressed="isFav"
         @click="toggleFav"
       >
         <h-icon :icon="isFav ? 'mdi:star' : 'mdi:star-outline'" :size="18" />
       </button>
+    </div>
+
+    <div v-if="securityNotice" class="tool-view__security" :class="`tool-view__security--${securityNotice.level}`" role="note">
+      <h-icon :icon="securityNotice.level === 'danger' ? 'mdi:alert-octagon-outline' : 'mdi:information-outline'" :size="18" aria-hidden="true" />
+      <div>
+        <strong>{{ securityNotice.title }}</strong>
+        <span>{{ securityNotice.message }}</span>
+      </div>
     </div>
 
     <!-- 工具内容 -->
@@ -28,12 +39,12 @@
         <span class="tool-view__error-title">{{ errorTitle }}</span>
         <span class="tool-view__error-msg">{{ loadError.message }}</span>
         <div class="tool-view__error-actions">
-          <button class="tool-view__retry" @click="retry">重试</button>
+          <button class="tool-view__retry" @click="retry">{{ t('tool.retry') }}</button>
         </div>
       </div>
       <div v-else-if="!toolComponent" class="tool-view__loading">
         <h-icon icon="mdi:loading" :size="32" color="var(--color-primary)" />
-        <span>加载中...</span>
+        <span>{{ t('tool.loading') }}</span>
       </div>
       <component v-else :is="toolComponent" :key="toolId" />
     </div>
@@ -66,6 +77,7 @@ import { useI18n } from 'vue-i18n'
 import { useToolsStore } from '../stores/tools'
 import { useHistoryStore } from '../stores/history'
 import { useFavoritesStore } from '../stores/favorites'
+import { useRemoteToolsStore } from '../stores/remoteTools'
 
 const route = useRoute()
 const router = useRouter()
@@ -73,10 +85,37 @@ const { t } = useI18n()
 const toolsStore = useToolsStore()
 const historyStore = useHistoryStore()
 const favoritesStore = useFavoritesStore()
+const remoteToolsStore = useRemoteToolsStore()
 
 const toolId = computed(() => route.params.id as string)
 
 const tool = computed(() => toolsStore.getToolById(toolId.value))
+const legacyAlgorithms = new Set([
+  'des-encryption', 'rc4-encryption', 'tea-encryption', 'xtea-encryption',
+  'blowfish-encryption', 'idea-encryption', 'rabbit-cipher', 'classical-cipher',
+  'playfair-cipher', 'text-encryptor'
+])
+const nonCryptographicHashes = new Set(['city-hash', 'fnv-hash', 'murmur-hash'])
+const unauthenticatedCiphers = new Set([
+  'aes-cbc-encryption', 'aes-ctr-encryption', 'camellia-encryption',
+  'chacha20-encryption', 'salsa20-encryption', 'sm4-encryption', 'twofish-encryption'
+])
+const securityNotice = computed(() => {
+  if (legacyAlgorithms.has(toolId.value)) return {
+    level: 'danger', title: '仅用于兼容与学习',
+    message: '该算法不适合保护新数据。不要用于密码存储、令牌或生产系统的新加密方案。'
+  }
+  if (nonCryptographicHashes.has(toolId.value)) return {
+    level: 'warning', title: '非加密哈希',
+    message: '适合哈希表、分片或校验场景，不能用于密码存储、签名或防篡改。'
+  }
+  if (unauthenticatedCiphers.has(toolId.value)) return {
+    level: 'warning', title: '不提供完整性保护',
+    message: '此工具只执行基础算法或模式。生产场景应优先使用带认证的 AEAD（如 AES-GCM）并妥善管理随机数。'
+  }
+  return null
+})
+const isIsolatedRemote = computed(() => route.query.isolated === '1' && remoteToolsStore.isInstalled(toolId.value))
 
 // 手动管理异步组件加载，避免 defineAsyncComponent 的 __esModule 歧义
 const loadedComponent = shallowRef<ReturnType<typeof defineComponent> | null>(null)
@@ -86,10 +125,10 @@ const loadError = ref<{ type: string; message: string } | null>(null)
 function classifyError(err: unknown): { type: string; message: string } {
   const msg = (err as Error)?.message || String(err)
   if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('ERR_')) {
-    return { type: 'network', message: '网络连接失败，请检查网络后重试' }
+    return { type: 'network', message: t('tool.networkMessage') }
   }
   if (msg.includes('404') || msg.includes('Not Found') || msg.includes('所有版本均加载失败')) {
-    return { type: 'not-found', message: '工具文件不存在，可能已被移除' }
+    return { type: 'not-found', message: t('tool.notFoundMessage') }
   }
   if (msg.includes('不支持 import') || msg.includes('编译') || msg.includes('SyntaxError') || msg.includes('Unexpected')) {
     return { type: 'compile', message: '工具代码编译失败: ' + msg.substring(0, 150) }
@@ -108,16 +147,20 @@ const errorIcon = computed(() => {
 
 const errorTitle = computed(() => {
   switch (loadError.value?.type) {
-    case 'network': return '网络错误'
-    case 'not-found': return '工具不存在'
-    case 'compile': return '编译错误'
-    default: return '加载失败'
+    case 'network': return t('tool.networkError')
+    case 'not-found': return t('tool.notFound')
+    case 'compile': return t('tool.compileError')
+    default: return t('tool.loadFailed')
   }
 })
 
 async function loadTool(): Promise<void> {
   loadedComponent.value = null
   loadError.value = null
+  if (remoteToolsStore.isInstalled(toolId.value) && !isIsolatedRemote.value) {
+    window.supertools?.openRemoteTool(toolId.value)
+    return
+  }
   if (tool.value?.component) {
     try {
       const result = await tool.value.component()
@@ -243,6 +286,34 @@ function openTool(id: string): void {
   flex: 1;
   overflow: auto;
   padding: 16px 24px;
+}
+
+.tool-view__security {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 24px 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--color-warning) 46%, var(--border-color));
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--color-warning) 9%, var(--bg-surface));
+
+  > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  strong { font-size: 12px; }
+  span { color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+
+  &--danger {
+    border-color: color-mix(in srgb, var(--color-error) 46%, var(--border-color));
+    background: color-mix(in srgb, var(--color-error) 8%, var(--bg-surface));
+  }
+}
+
+@media (max-width: 720px) {
+  .tool-view__header { padding: 12px 16px; }
+  .tool-view__back, .tool-view__fav-btn { width: 44px; height: 44px; flex: 0 0 44px; }
+  .tool-view__security { margin: 10px 16px 0; }
+  .tool-view__content { padding: 12px 16px; }
 }
 
 .tool-view__loading {

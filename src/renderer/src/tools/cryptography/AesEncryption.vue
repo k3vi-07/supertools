@@ -39,20 +39,18 @@
         <h-input v-model="iv" placeholder="输入 IV..." />
       </div>
 
-      <div class="aes-encryption__actions">
-        <h-radio
-          v-model="action"
-          :options="[
-            { label: '加密', value: 'encrypt' },
-            { label: '解密', value: 'decrypt' }
-          ]"
-          size="small"
-        />
-      </div>
-
       <h-text-transform
         :sample-data="sampleText"
-        :transform="processFn"
+        enable-reverse
+        forward-label="加密"
+        reverse-label="解密"
+        forward-input-title="明文"
+        forward-output-title="密文"
+        reverse-input-title="密文"
+        reverse-output-title="明文"
+        :transform="encrypt"
+        :reverse-transform="decrypt"
+        :refresh-key="[mode, keySize, outputEncoding, key, iv]"
       />
     </div>
   </h-single-layout>
@@ -65,45 +63,48 @@ import CryptoJS from 'crypto-js'
 const mode = ref<'CBC' | 'ECB'>('CBC')
 const keySize = ref<number>(256)
 const outputEncoding = ref<'Base64' | 'Hex'>('Base64')
-const key = ref('my-secret-key-123')
+const key = ref('1234567890abcdef1234567890abcdef')
 const iv = ref('1234567890123456')
-const action = ref<'encrypt' | 'decrypt'>('encrypt')
 const sampleText = 'Hello SuperTools! AES 加解密测试。'
 
-function processFn(input: string): string {
-  if (!input || !key.value) return ''
-  try {
-    const enc = outputEncoding.value === 'Base64' ? CryptoJS.enc.Base64 : CryptoJS.enc.Hex
-    const keyParsed = CryptoJS.enc.Utf8.parse(key.value)
-
-    if (action.value === 'encrypt') {
-      const options: Record<string, unknown> = {
-        mode: mode.value === 'CBC' ? CryptoJS.mode.CBC : CryptoJS.mode.ECB,
-        padding: CryptoJS.pad.Pkcs7,
-        keySize: keySize.value / 32
-      }
-      if (mode.value === 'CBC') {
-        options.iv = CryptoJS.enc.Utf8.parse(iv.value)
-      }
-      const encrypted = CryptoJS.AES.encrypt(input, keyParsed, options as never)
-      return encrypted.ciphertext.toString(enc)
-    } else {
-      const options: Record<string, unknown> = {
-        mode: mode.value === 'CBC' ? CryptoJS.mode.CBC : CryptoJS.mode.ECB,
-        padding: CryptoJS.pad.Pkcs7
-      }
-      if (mode.value === 'CBC') {
-        options.iv = CryptoJS.enc.Utf8.parse(iv.value)
-      }
-      const cipherParams = CryptoJS.lib.CipherParams.create({
-        ciphertext: enc.parse(input)
-      })
-      const decrypted = CryptoJS.AES.decrypt(cipherParams, keyParsed, options as never)
-      return decrypted.toString(CryptoJS.enc.Utf8)
-    }
-  } catch (err) {
-    return `❌ ${(err as Error).message}`
+function getParameters(): { enc: typeof CryptoJS.enc.Base64; keyParsed: CryptoJS.lib.WordArray; options: Record<string, unknown> } {
+  const requiredKeyBytes = keySize.value / 8
+  const actualKeyBytes = new TextEncoder().encode(key.value).length
+  if (actualKeyBytes !== requiredKeyBytes) throw new Error(`密钥必须正好是 ${requiredKeyBytes} 字节，当前为 ${actualKeyBytes} 字节`)
+  if (mode.value === 'CBC') {
+    const actualIvBytes = new TextEncoder().encode(iv.value).length
+    if (actualIvBytes !== 16) throw new Error(`CBC 的 IV 必须正好是 16 字节，当前为 ${actualIvBytes} 字节`)
   }
+  const options: Record<string, unknown> = {
+    mode: mode.value === 'CBC' ? CryptoJS.mode.CBC : CryptoJS.mode.ECB,
+    padding: CryptoJS.pad.Pkcs7
+  }
+  if (mode.value === 'CBC') options.iv = CryptoJS.enc.Utf8.parse(iv.value)
+  return {
+    enc: outputEncoding.value === 'Base64' ? CryptoJS.enc.Base64 : CryptoJS.enc.Hex,
+    keyParsed: CryptoJS.enc.Utf8.parse(key.value),
+    options
+  }
+}
+
+function encrypt(input: string): string {
+  const { enc, keyParsed, options } = getParameters()
+  const encrypted = CryptoJS.AES.encrypt(input, keyParsed, options as never)
+  return encrypted.ciphertext.toString(enc)
+}
+
+function decrypt(input: string): string {
+  const { enc, keyParsed, options } = getParameters()
+  const normalized = input.trim()
+  if (!normalized) return ''
+  if (outputEncoding.value === 'Hex' && (!/^[0-9a-f]+$/i.test(normalized) || normalized.length % 2 !== 0)) {
+    throw new Error('密文不是有效的 Hex')
+  }
+  const cipherParams = CryptoJS.lib.CipherParams.create({ ciphertext: enc.parse(normalized) })
+  const decrypted = CryptoJS.AES.decrypt(cipherParams, keyParsed, options as never)
+  const plaintext = decrypted.toString(CryptoJS.enc.Utf8)
+  if (!plaintext) throw new Error('解密失败，请检查密钥、IV、模式和密文编码')
+  return plaintext
 }
 </script>
 

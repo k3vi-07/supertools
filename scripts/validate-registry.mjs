@@ -30,7 +30,8 @@ const colors = {
   green: (s) => `\x1b[32m${s}\x1b[0m`,
   yellow: (s) => `\x1b[33m${s}\x1b[0m`,
   cyan: (s) => `\x1b[36m${s}\x1b[0m`,
-  bold: (s) => `\x1b[1m${s}\x1b[0m`
+  bold: (s) => `\x1b[1m${s}\x1b[0m`,
+  dim: (s) => `\x1b[2m${s}\x1b[0m`
 }
 
 let errorCount = 0
@@ -127,6 +128,13 @@ for (let i = 0; i < registry.tools.length; i++) {
       hasError = true
     } else {
       registeredFiles.add(basename(t.path))
+      const source = readFileSync(fullPath, 'utf8')
+      for (const marker of ['Shared interaction baseline', ':focus-visible', 'prefers-reduced-motion']) {
+        if (!source.includes(marker)) {
+          error(`${prefix} ${t.id}: 缺少统一交互基线 ${marker}`)
+          hasError = true
+        }
+      }
     }
   }
 

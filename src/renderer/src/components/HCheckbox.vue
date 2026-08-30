@@ -33,7 +33,15 @@ defineEmits<{
   user-select: none;
 
   &__input {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 
   &__box {
@@ -51,6 +59,11 @@ defineEmits<{
   &__input:checked + &__box {
     background: var(--color-primary);
     border-color: var(--color-primary);
+  }
+
+  &__input:focus-visible + &__box {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
   }
 
   &__label {

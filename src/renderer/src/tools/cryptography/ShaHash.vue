@@ -23,6 +23,7 @@
       <h-text-transform
         :sample-data="sample"
         :transform="hashFn"
+        :refresh-key="[algorithm, upperCase, base64]"
       />
     </div>
   </h-single-layout>

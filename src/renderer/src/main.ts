@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import { createRouter, createWebHashHistory } from 'vue-router'
 import App from './App.vue'
+import SearchView from './views/SearchView.vue'
 import { registerComponents } from './components/register'
 import { allTools, mergeRemoteTools } from './tools'
 import { useToolsStore } from './stores/tools'
@@ -38,7 +39,7 @@ const router = createRouter({
     {
       path: '/search',
       name: 'search',
-      component: () => import('./views/SearchView.vue')
+      component: SearchView
     },
     {
       path: '/settings',

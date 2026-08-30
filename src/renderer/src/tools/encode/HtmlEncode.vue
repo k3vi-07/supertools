@@ -16,6 +16,13 @@
         :enable-reverse="true"
         :transform="encodeFn"
         :reverse-transform="decodeFn"
+        :refresh-key="mode"
+        forward-label="编码"
+        reverse-label="解码"
+        forward-input-title="HTML 文本"
+        forward-output-title="HTML 实体"
+        reverse-input-title="HTML 实体"
+        reverse-output-title="HTML 文本"
       />
     </div>
   </h-single-layout>

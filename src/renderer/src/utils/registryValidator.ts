@@ -31,8 +31,12 @@ export interface ValidationResult {
 /** 校验单个工具条目 */
 function validateToolEntry(entry: unknown, index: number, seenIds: Set<string>): string[] {
   const errors: string[] = []
-  const e = entry as Record<string, unknown>
   const prefix = `工具[${index}]`
+
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+    return [`${prefix}: 必须是对象`]
+  }
+  const e = entry as Record<string, unknown>
 
   // 必填字段
   if (typeof e.id !== 'string' || !ID_REGEX.test(e.id)) {
@@ -74,7 +78,7 @@ function validateToolEntry(entry: unknown, index: number, seenIds: Set<string>):
   }
 
   // keywords
-  if (!Array.isArray(e.keywords) || e.keywords.length > 30) {
+  if (!Array.isArray(e.keywords) || e.keywords.length > 30 || e.keywords.some((k) => typeof k !== 'string' || k.length > 100)) {
     errors.push(`${prefix}: keywords 无效（需为数组，最多 30 个）`)
   }
 

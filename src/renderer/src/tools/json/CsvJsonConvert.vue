@@ -1,35 +1,24 @@
 <template>
   <h-single-layout>
     <div class="csv-json">
-      <div class="csv-json__options">
-        <h-radio
-          v-model="direction"
-          :options="[
-            { label: 'CSV → JSON', value: 'toJSON' },
-            { label: 'JSON → CSV', value: 'toCSV' }
-          ]"
-          size="small"
-        />
-      </div>
-      <h-transform
-        left-title="输入"
-        right-title="输出"
-        :sample-data="direction === 'toJSON' ? csvSample : jsonSample"
-        :input-handler="convertFn"
+      <h-text-transform
+        :sample-data="csvSample"
+        :enable-reverse="true"
+        :transform="csvToJson"
+        :reverse-transform="jsonToCsv"
+        forward-label="CSV → JSON"
+        reverse-label="JSON → CSV"
+        forward-input-title="CSV"
+        forward-output-title="JSON"
+        reverse-input-title="JSON"
+        reverse-output-title="CSV"
       />
     </div>
   </h-single-layout>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-
-const direction = ref<'toJSON' | 'toCSV'>('toJSON')
 const csvSample = 'name,version,openSource\nSuperTools,1.0.0,true\nDevTool,2.1.0,false'
-const jsonSample = JSON.stringify([
-  { name: 'SuperTools', version: '1.0.0', openSource: 'true' },
-  { name: 'DevTool', version: '2.1.0', openSource: 'false' }
-], null, 2)
 
 function csvToJson(csv: string): string {
   const lines = csv.trim().split('\n')
@@ -82,13 +71,6 @@ function jsonToCsv(json: string): string {
   return lines.join('\n')
 }
 
-function convertFn(input: string): string {
-  try {
-    return direction.value === 'toJSON' ? csvToJson(input) : jsonToCsv(input)
-  } catch (err) {
-    return `❌ 转换失败: ${(err as Error).message}`
-  }
-}
 </script>
 
 <style scoped lang="less">

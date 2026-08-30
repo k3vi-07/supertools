@@ -13,7 +13,7 @@
         <label class="tab-space__label">空格数: {{ tabSize }}</label>
         <input type="range" v-model.number="tabSize" min="1" max="8" class="tab-space__slider" />
       </div>
-      <h-text-transform sample-data="	if (true) {\n		return 'hello';\n	}" :transform="convertFn" />
+      <h-text-transform sample-data="	if (true) {\n		return 'hello';\n	}" :transform="convertFn" :refresh-key="[direction, tabSize]" />
     </div>
   </h-single-layout>
 </template>

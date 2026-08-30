@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { Theme, Lang } from '@shared/types'
+import { i18n } from '../i18n'
 import { storageGet, storageSet } from '../utils/storage'
 
 /** 默认快捷键 */
@@ -89,6 +90,7 @@ export const useSettingsStore = defineStore('settings', () => {
 
   function setLang(newLang: Lang): void {
     lang.value = newLang
+    i18n.global.locale.value = newLang
     storageSet('lang', newLang)
   }
 

@@ -29,6 +29,7 @@
 
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
+import { parseIntegerStrict } from '../../utils/encodingTransforms'
 
 const bases = [
   { value: 2, label: '二进制 (Binary)', prefix: '0b' },
@@ -47,22 +48,24 @@ const error = ref('')
 
 function convert(fromBase: number, inputValue: string): void {
   error.value = ''
-  const cleaned = inputValue.trim().replace(/^[0box]+/i, '')
+  const cleaned = inputValue.trim()
 
   if (!cleaned) {
     for (const b of bases) values[b.value] = ''
     return
   }
 
-  const num = parseInt(cleaned, fromBase)
-  if (isNaN(num)) {
-    error.value = `无效的 ${fromBase} 进制数字`
+  let number: bigint
+  try {
+    number = parseIntegerStrict(cleaned, fromBase)
+  } catch (err) {
+    error.value = (err as Error).message
     return
   }
 
   for (const b of bases) {
     if (b.value !== fromBase) {
-      values[b.value] = num.toString(b.value).toUpperCase()
+      values[b.value] = number.toString(b.value).toUpperCase()
     }
   }
 }

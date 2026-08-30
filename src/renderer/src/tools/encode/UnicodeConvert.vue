@@ -2,22 +2,23 @@
   <h-single-layout>
     <div class="unicode-convert">
       <div class="unicode-convert__options">
-        <h-radio
-          v-model="direction"
-          :options="[
-            { label: '中文 → Unicode', value: 'toUnicode' },
-            { label: 'Unicode → 中文', value: 'toChinese' }
-          ]"
-          size="small"
-        />
         <label class="unicode-convert__check">
           <input type="checkbox" v-model="addU" /> \u 前缀
         </label>
       </div>
       <h-text-transform
         :sample-data="sample"
-        :transform="convertFn"
+        :enable-reverse="true"
+        :transform="toUnicode"
+        :reverse-transform="toChinese"
         :auto-fill-input-condition="likeUnicode"
+        :refresh-key="addU"
+        forward-label="文本 → Unicode"
+        reverse-label="Unicode → 文本"
+        forward-input-title="文本"
+        forward-output-title="Unicode 转义"
+        reverse-input-title="Unicode 转义"
+        reverse-output-title="文本"
       />
     </div>
   </h-single-layout>
@@ -25,39 +26,17 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { textToUnicodeEscapes, unicodeEscapesToText } from '../../utils/encodingTransforms'
 
-const direction = ref<'toUnicode' | 'toChinese'>('toUnicode')
 const addU = ref(true)
 const sample = '你好世界 SuperTools'
 
 function toUnicode(input: string): string {
-  let result = ''
-  for (const char of input) {
-    const code = char.codePointAt(0)!
-    if (code > 127) {
-      const hex = code.toString(16).padStart(4, '0')
-      result += addU.value ? '\\u' + hex : hex
-    } else {
-      result += char
-    }
-  }
-  return result
+  return textToUnicodeEscapes(input, addU.value)
 }
 
 function toChinese(input: string): string {
-  return input.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => {
-    return String.fromCharCode(parseInt(hex, 16))
-  }).replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => {
-    return String.fromCodePoint(parseInt(hex, 16))
-  })
-}
-
-function convertFn(input: string): string {
-  try {
-    return direction.value === 'toUnicode' ? toUnicode(input) : toChinese(input)
-  } catch {
-    return 'Error: 转换失败'
-  }
+  return unicodeEscapesToText(input)
 }
 
 function likeUnicode(str: string): boolean {

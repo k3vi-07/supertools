@@ -54,7 +54,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import bcrypt from 'bcryptjs'
+import bcrypt from 'bcryptjs/dist/bcrypt.js'
 
 const mode = ref<'hash' | 'verify'>('hash')
 const password = ref('mypassword123')

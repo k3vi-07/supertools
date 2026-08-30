@@ -17,6 +17,8 @@ interface UpdateEvent {
 /** supertools 预加载 API（搜索浮层导航等） */
 interface SuperToolsAPI {
   navigateToTool(toolId: string): void
+  /** 在独立 sandbox 窗口打开远程工具 */
+  openRemoteTool(toolId: string): void
   hideSearch(): void
   showMain(): void
   onHide(cb: () => void): void
@@ -35,6 +37,7 @@ interface SuperToolsAPI {
   deleteCache(key: string): Promise<boolean>
   /** 清空所有组件缓存 */
   clearCache(): Promise<boolean>
+  camelliaBlock(mode: 'encrypt' | 'decrypt', keyHex: string, dataHex: string): Promise<string>
   /** 手动检查更新 */
   checkForUpdates(): Promise<void>
   /** 安装已下载的更新并重启 */

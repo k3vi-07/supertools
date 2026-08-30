@@ -10,13 +10,19 @@
           ]"
           size="small"
         />
-        <h-button size="small" icon="mdi:swap-horizontal" @click="swap">交换</h-button>
       </div>
       <h-text-transform
         :sample-data="sample"
         :enable-reverse="true"
         :transform="encodeFn"
         :reverse-transform="decodeFn"
+        :refresh-key="mode"
+        forward-label="编码"
+        reverse-label="解码"
+        forward-input-title="原始 URL"
+        forward-output-title="编码结果"
+        reverse-input-title="编码 URL"
+        reverse-output-title="解码结果"
       />
     </div>
   </h-single-layout>
@@ -44,9 +50,6 @@ function decodeFn(input: string): string {
   }
 }
 
-function swap(): void {
-  mode.value = mode.value === 'uri' ? 'component' : 'uri'
-}
 </script>
 
 <style scoped lang="less">

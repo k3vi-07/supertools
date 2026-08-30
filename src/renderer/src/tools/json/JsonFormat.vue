@@ -19,6 +19,7 @@
       output-lang="json"
       :sample-data="sample"
       :input-handler="formatFn"
+      :refresh-key="indent"
       :auto-fill-input-condition="isJson"
     />
   </h-single-layout>

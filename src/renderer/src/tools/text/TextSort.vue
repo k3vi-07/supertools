@@ -14,7 +14,7 @@
         <h-checkbox v-model="caseSensitive" label="区分大小写" />
         <h-checkbox v-model="numericSort" label="数字排序" />
       </div>
-      <h-text-transform :sample-data="sample" :transform="sortFn" />
+      <h-text-transform :sample-data="sample" :transform="sortFn" :refresh-key="[order, caseSensitive, numericSort]" />
     </div>
   </h-single-layout>
 </template>

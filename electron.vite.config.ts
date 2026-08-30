@@ -1,8 +1,21 @@
-import { resolve } from 'path'
+import { dirname, extname, resolve } from 'path'
+import { existsSync } from 'fs'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import vue from '@vitejs/plugin-vue'
+import type { Plugin } from 'vite'
 
 const root = __dirname || process.cwd()
+
+/** crypto-api@0.8.5 ships extensionless relative imports inside .mjs files. */
+const cryptoApiExtensionResolver = (): Plugin => ({
+  name: 'crypto-api-extension-resolver',
+  enforce: 'pre',
+  resolveId(source, importer) {
+    if (!importer?.includes('/node_modules/crypto-api/') || !source.startsWith('.') || extname(source)) return null
+    const resolved = resolve(dirname(importer), `${source}.mjs`)
+    return existsSync(resolved) ? resolved : null
+  }
+})
 
 export default defineConfig({
   main: {
@@ -48,10 +61,11 @@ export default defineConfig({
         '@stores': resolve(root, 'src/renderer/src/stores'),
         '@utils': resolve(root, 'src/renderer/src/utils'),
         '@tools': resolve(root, 'src/renderer/src/tools'),
-        '@shared': resolve(root, 'src/shared')
+        '@shared': resolve(root, 'src/shared'),
+        crypto: resolve(root, 'src/renderer/src/shims/crypto.ts')
       }
     },
-    plugins: [vue()],
+    plugins: [cryptoApiExtensionResolver(), vue()],
     define: {
       global: 'globalThis'
     },
@@ -66,7 +80,7 @@ export default defineConfig({
       }
     },
     optimizeDeps: {
-      exclude: ['electron']
+      exclude: ['electron', 'crypto-api']
     }
   }
 })

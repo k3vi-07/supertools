@@ -50,19 +50,21 @@ function parseManifests(filePath) {
   // 匹配 id: 'xxx' 块 — 用 id 为锚点提取每个 manifest 对象的字段
   const idMatches = [...content.matchAll(/id:\s*['"]([^'"]+)['"]/g)]
 
-  for (const match of idMatches) {
+  for (const [index, match] of idMatches.entries()) {
     const id = match[1]
     const pos = match.index
+    const nextPos = idMatches[index + 1]?.index ?? content.length
+    const objectSlice = content.slice(pos, nextPos)
 
-    // 从 id 位置向后搜索同一对象内的字段
-    const nameMatch = content.slice(pos, pos + 800).match(/name:\s*['"]([^'"]*)['"]/)
-    const nameZhMatch = content.slice(pos, pos + 800).match(/nameZh:\s*['"]([^'"]*)['"]/)
-    const iconMatch = content.slice(pos, pos + 800).match(/icon:\s*['"]([^'"]*)['"]/)
-    const descMatch = content.slice(pos, pos + 800).match(/description:\s*['"]([^'"]*)['"]/)
-    const compFileMatch = content.slice(pos, pos + 800).match(/componentFile:\s*['"]([^'"]*)['"]/)
+    // 仅在当前 manifest 对象范围内提取字段，避免读取到下一个对象的 componentFile 等字段。
+    const nameMatch = objectSlice.match(/name:\s*['"]([^'"]*)['"]/)
+    const nameZhMatch = objectSlice.match(/nameZh:\s*['"]([^'"]*)['"]/)
+    const iconMatch = objectSlice.match(/icon:\s*['"]([^'"]*)['"]/)
+    const descMatch = objectSlice.match(/description:\s*['"]([^'"]*)['"]/)
+    const compFileMatch = objectSlice.match(/componentFile:\s*['"]([^'"]*)['"]/)
 
     // category — 提取数组
-    const catSlice = content.slice(pos, pos + 800)
+    const catSlice = objectSlice
     const catArray = catSlice.match(/category:\s*\[([^\]]*)\]/)
     const categories = catArray
       ? catArray[1].match(/['"]([^'"]+)['"]/g)?.map(s => s.replace(/['"]/g, '')) || []
@@ -128,6 +130,16 @@ const allTools = []
 const allIds = new Set()
 const vueFiles = collectVueFiles()
 const registeredVueFiles = new Set()
+const importedVueFiles = new Set()
+
+// 通用实现组件会被具体工具组件相对导入，它们不是独立工具，也不应被当作孤立文件。
+for (const vueFile of vueFiles) {
+  const content = readFileSync(vueFile, 'utf-8')
+  for (const match of content.matchAll(/from\s+['"](\.\.?\/[^'"]+\.vue)['"]/g)) {
+    const importedPath = join(dirname(vueFile), match[1])
+    if (vueFiles.has(importedPath)) importedVueFiles.add(importedPath)
+  }
+}
 
 for (const cat of categories) {
   const manifestPath = join(toolsDir, cat, 'manifests.ts')
@@ -216,7 +228,7 @@ if (!refErrors && allTools.some(t => t.relatedToolIds.length > 0)) {
 
 // 孤立组件检测
 console.log(colors.cyan('\n📦 孤立组件检测'))
-const orphans = [...vueFiles].filter(f => !registeredVueFiles.has(f))
+const orphans = [...vueFiles].filter(f => !registeredVueFiles.has(f) && !importedVueFiles.has(f))
 if (orphans.length === 0) {
   console.log(colors.green('  ✅ 无孤立组件'))
 } else {

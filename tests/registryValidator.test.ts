@@ -27,6 +27,18 @@ describe('registryValidator', () => {
     expect(result.sanitized).toBeNull()
   })
 
+  it('rejects null and array tool entries without throwing', () => {
+    const result = validateRegistry({ name: 'x', tools: [null, [], validTool] })
+    expect(result.sanitized?.tools.length).toBe(1)
+    expect(result.errors.some(e => e.includes('必须是对象'))).toBe(true)
+  })
+
+  it('rejects non-string keywords', () => {
+    const result = validateRegistry({ name: 'x', tools: [{ ...validTool, keywords: ['ok', 123] }] })
+    expect(result.valid).toBe(false)
+    expect(result.sanitized).toBeNull()
+  })
+
   it('rejects non-array tools', () => {
     const result = validateRegistry({ name: 'x', tools: 'not array' })
     expect(result.valid).toBe(false)

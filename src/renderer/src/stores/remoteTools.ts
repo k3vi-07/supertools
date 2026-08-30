@@ -169,8 +169,9 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
   }
 
   /** 安装远程工具（同时预下载组件到本地缓存） */
-  function installTool(entry: RemoteToolEntry, repoId: string): void {
+  async function installTool(entry: RemoteToolEntry, repoId: string): Promise<boolean> {
     const version = entry.version || 'master'
+    if (!await precacheRemoteComponent(repoId, entry.path, version)) return false
     if (installedIds.value.has(entry.id)) {
       // 更新已有安装
       installedTools.value = installedTools.value.filter((t) => t.id !== entry.id)
@@ -185,10 +186,7 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
     outdatedTools.value = outdatedTools.value.filter((t) => t.toolId !== entry.id)
     save()
 
-    // 异步预下载组件源码到本地缓存（不阻塞 UI）
-    precacheRemoteComponent(repoId, entry.path, version).catch(() => {
-      // 预下载失败不影响安装，后续打开工具时会自动重试
-    })
+    return true
   }
 
   /** 卸载远程工具（同时清理本地缓存） */
@@ -220,8 +218,7 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
     let count = 0
     for (const entry of registry.tools) {
       if (!installedIds.value.has(entry.id)) {
-        installTool(entry, repoId)
-        count++
+        if (await installTool(entry, repoId)) count++
       }
     }
     return count
@@ -249,28 +246,24 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
         repoGroups.set(tool.sourceRepo, group)
       }
 
-      for (const [repoId, tools] of repoGroups) {
+      const results = await Promise.all([...repoGroups].map(async ([repoId, tools]) => {
+        const found: OutdatedTool[] = []
         try {
           const registry = await fetchRegistry(repoId, true)
           const registryMap = new Map(registry.tools.map((t) => [t.id, t]))
           for (const installed of tools) {
             const latest = registryMap.get(installed.id)
-            if (latest) {
-              const latestVersion = latest.version || 'master'
-              if (latestVersion !== installed.installedVersion) {
-                outdated.push({
-                  toolId: installed.id,
-                  installedVersion: installed.installedVersion,
-                  latestVersion,
-                  entry: latest
-                })
-              }
+            const latestVersion = latest?.version || 'master'
+            if (latest && isVersionNewer(latestVersion, installed.installedVersion)) {
+              found.push({ toolId: installed.id, installedVersion: installed.installedVersion, latestVersion, entry: latest })
             }
           }
         } catch {
           // 仓库获取失败，跳过
         }
-      }
+        return found
+      }))
+      outdated.push(...results.flat())
       outdatedTools.value = outdated
       return outdated
     } finally {
@@ -278,22 +271,36 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
     }
   }
 
+  /** 仅对 semver 做大小比较；分支名/提交 hash 变化仍按字符串变化处理 */
+  function isVersionNewer(latest: string, installed: string): boolean {
+    const parse = (value: string): number[] | null => {
+      const match = value.replace(/^v/, '').match(/^(\d+)\.(\d+)\.(\d+)$/)
+      return match ? match.slice(1).map(Number) : null
+    }
+    const a = parse(latest)
+    const b = parse(installed)
+    if (!a || !b) return latest !== installed
+    for (let i = 0; i < 3; i++) {
+      if (a[i] !== b[i]) return a[i] > b[i]
+    }
+    return false
+  }
+
   /** 更新单个工具到最新版本 */
   function updateTool(toolId: string): void {
     const outdated = outdatedTools.value.find((t) => t.toolId === toolId)
     if (!outdated) return
     const installed = installedTools.value.find((t) => t.id === toolId)
-    if (installed) installTool(outdated.entry, installed.sourceRepo)
+    if (installed) void installTool(outdated.entry, installed.sourceRepo)
   }
 
   /** 更新所有过期工具 */
-  function updateAll(): number {
+  async function updateAll(): Promise<number> {
     let count = 0
-    for (const outdated of outdatedTools.value) {
+    for (const outdated of [...outdatedTools.value]) {
       const installed = installedTools.value.find((t) => t.id === outdated.toolId)
       if (installed) {
-        installTool(outdated.entry, installed.sourceRepo)
-        count++
+        if (await installTool(outdated.entry, installed.sourceRepo)) count++
       }
     }
     outdatedTools.value = []
@@ -349,8 +356,7 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
           const registry = await fetchRegistry(item.sourceRepo)
           const entry = registry.tools.find((t) => t.id === item.id)
           if (entry) {
-            installTool(entry, item.sourceRepo)
-            success++
+            if (await installTool(entry, item.sourceRepo)) success++
           } else {
             failed++
           }

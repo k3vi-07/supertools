@@ -6,13 +6,13 @@
       <div class="sidebar__drag-region"></div>
 
       <!-- Logo -->
-      <div class="sidebar__logo" @click="router.push('/')">
+      <div class="sidebar__logo" role="button" tabindex="0" aria-label="返回首页" @click="router.push('/')" @keydown.enter="router.push('/')" @keydown.space.prevent="router.push('/')">
         <img src="../assets/icon.png" alt="SuperTools" class="sidebar__logo-icon" />
         <span class="sidebar__logo-text">SuperTools</span>
       </div>
 
       <!-- 搜索框 -->
-      <div class="sidebar__search" @click="focusSearch">
+      <div class="sidebar__search" role="button" tabindex="0" aria-label="搜索工具" @click="focusSearch" @keydown.enter="focusSearch" @keydown.space.prevent="focusSearch">
         <h-icon icon="mdi:magnify" :size="16" color="var(--text-tertiary)" />
         <span class="sidebar__search-placeholder">搜索工具</span>
         <kbd class="sidebar__search-kbd">{{ shortcutHint }}</kbd>
@@ -80,7 +80,7 @@
           <h-icon icon="mdi:cog-outline" :size="18" />
           <span>{{ t('nav.settings') }}</span>
         </RouterLink>
-        <button class="sidebar__theme-btn" @click="settingsStore.toggleTheme()">
+        <button type="button" class="sidebar__theme-btn" :aria-label="settingsStore.theme === 'dark' ? '切换到浅色主题' : '切换到深色主题'" @click="settingsStore.toggleTheme()">
           <h-icon
             :icon="settingsStore.theme === 'dark' ? 'mdi:weather-night' : 'mdi:weather-sunny'"
             :size="18"
@@ -179,6 +179,11 @@ onUnmounted(() => {
   background: var(--bg-surface);
   border-right: 1px solid var(--border-color);
   padding: 0 0 12px;
+
+  :where([role='button'], a, button):focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
 
   &__drag-region {
     height: 28px;
@@ -331,6 +336,14 @@ onUnmounted(() => {
       color: var(--text-primary);
     }
   }
+}
+
+@media (max-width: 720px) {
+  .sidebar__theme-btn { width: 44px; height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar :where(*) { transition-duration: 0.01ms !important; }
 }
 
 .main-content {

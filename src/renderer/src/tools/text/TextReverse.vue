@@ -12,7 +12,7 @@
           size="small"
         />
       </div>
-      <h-text-transform sample-data="Hello World 你好世界" :transform="reverseFn" />
+      <h-text-transform sample-data="Hello World 你好世界" :transform="reverseFn" :refresh-key="mode" />
     </div>
   </h-single-layout>
 </template>

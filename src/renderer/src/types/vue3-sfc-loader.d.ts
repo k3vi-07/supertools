@@ -6,3 +6,8 @@ declare module 'vue3-sfc-loader' {
     options: Record<string, unknown>
   ): Promise<Component | { default: Component }>
 }
+
+declare module 'bcryptjs/dist/bcrypt.js' {
+  const bcrypt: typeof import('bcryptjs')
+  export default bcrypt
+}

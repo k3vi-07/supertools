@@ -6,7 +6,7 @@
         <button
           v-if="copyable && modelValue"
           class="h-code-editor__btn"
-          title="复制"
+          :title="t('tool.copy')"
           @click="handleCopy"
         >
           <h-icon icon="mdi:content-copy" :size="14" />
@@ -14,7 +14,7 @@
         <button
           v-if="!readonly && modelValue"
           class="h-code-editor__btn"
-          title="清空"
+          :title="t('tool.clear')"
           @click="handleClear"
         >
           <h-icon icon="mdi:close" :size="14" />
@@ -25,7 +25,7 @@
       <textarea
         ref="textareaRef"
         :value="modelValue"
-        :placeholder="placeholder"
+        :placeholder="props.placeholder || t('tool.inputPlaceholder')"
         :readonly="readonly"
         :spellcheck="false"
         class="h-code-editor__textarea selectable"
@@ -41,6 +41,9 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
@@ -56,7 +59,7 @@ const props = withDefaults(
   }>(),
   {
     title: '',
-    placeholder: '在此输入...',
+    placeholder: '',
     lang: 'text',
     readonly: false,
     autofocus: false,

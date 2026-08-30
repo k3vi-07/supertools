@@ -11,8 +11,29 @@
  */
 import { loadModule } from 'vue3-sfc-loader'
 import * as Vue from 'vue'
+import bcryptjs from 'bcryptjs'
+import CryptoJS from 'crypto-js'
+import * as HashWasm from 'hash-wasm'
+import * as Twofish from 'twofish-ts'
+import * as Gost341194 from '@li0ard/gost341194'
+import TigerHash from 'fb-tiger-hash'
+import Snefru from 'crypto-api/src/hasher/snefru.mjs'
+import * as CryptoApiUtf from 'crypto-api/src/encoder/utf.mjs'
+import * as CryptoApiHex from 'crypto-api/src/encoder/hex.mjs'
+import * as Salsa20 from '@stablelib/salsa20'
+import * as ChaCha20 from '@stablelib/chacha'
+import * as NobleChaCha from '@noble/ciphers/chacha.js'
+import * as NobleAes from '@noble/ciphers/aes.js'
+import * as NobleCipherUtils from '@noble/ciphers/utils.js'
+import { initSync as initCityHash, cityhash64_hex, cityhash_102_128_hex } from 'ch-city-wasm'
+import getCityHashWasm from 'ch-city-wasm/wasm'
+import { Buffer } from 'buffer'
 import type { Component } from 'vue'
 import { globalComponents } from '../components/register'
+
+initCityHash({ module: getCityHashWasm() })
+// fb-tiger-hash expects the standard Buffer UTF encoder; provide the browser build locally.
+Object.assign(globalThis, { Buffer })
 
 /** jsDelivr CDN 基础 URL */
 const JSDELIVR_BASE = 'https://cdn.jsdelivr.net/gh'
@@ -32,42 +53,23 @@ export function buildCdnUrl(repo: string, path: string, version = 'master'): str
 
 /** Vue 运行时模块缓存（sfc-loader 需要） */
 const moduleCache: Record<string, unknown> = {
-  vue: Vue
+  vue: Vue,
+  bcryptjs,
+  'crypto-js': CryptoJS,
+  'hash-wasm': HashWasm,
+  'twofish-ts': Twofish,
+  '@li0ard/gost341194': Gost341194,
+  'fb-tiger-hash': TigerHash
+  , 'crypto-api/snefru': { default: Snefru }
+  , 'crypto-api/utf': CryptoApiUtf
+  , 'crypto-api/hex': CryptoApiHex
+  , '@stablelib/salsa20': Salsa20
+  , '@stablelib/chacha': ChaCha20
+  , '@noble/ciphers/chacha.js': NobleChaCha
+  , '@noble/ciphers/aes.js': NobleAes
+  , '@noble/ciphers/utils.js': NobleCipherUtils
+  , 'ch-city-wasm': { cityhash64_hex, cityhash_102_128_hex }
 }
-
-// 覆盖 Vue.resolveComponent — 让远程组件能解析全局注册的 h-xxx 组件
-// vue3-sfc-loader 编译的远程组件 render 函数中会调用 resolveComponent("h-xxx")
-// 但远程组件不继承 Vue app 的全局组件注册，导致返回 undefined → 页面空白
-// 注意：ESM 导入的属性是只读的，esbuild 依赖扫描阶段会拒绝直接赋值
-// 用函数包裹避免静态分析报错，运行时 try-catch 安全降级
-const _origResolve = Vue.resolveComponent
-const _patchedResolve = (name: string): unknown => {
-  const resolved = _origResolve(name)
-  if (resolved !== name) return resolved
-  const kebab = name.toLowerCase()
-  if (globalComponents[kebab]) return globalComponents[kebab]
-  return name
-}
-
-/** 运行时 patch resolveComponent（避免 esbuild 静态分析报错） */
-function patchResolveComponent(): void {
-  try {
-    // 生产模式：Vite 内联 Vue 后属性可写
-    ;(Vue as Record<string, unknown>).resolveComponent = _patchedResolve
-  } catch {
-    // 开发模式：ESM 属性只读，尝试 defineProperty
-    try {
-      Object.defineProperty(Vue, 'resolveComponent', {
-        value: _patchedResolve,
-        writable: true,
-        configurable: true
-      })
-    } catch {
-      // ESM 属性也不可配置，静默跳过，靠 componentDef.components 注入兜底
-    }
-  }
-}
-patchResolveComponent()
 
 /** 内存缓存：避免同一 session 内重复读磁盘 */
 const memoryCache = new Map<string, string>()
@@ -97,24 +99,10 @@ async function getFileWithCache(url: string): Promise<string> {
 
   // 3. 云端下载
   let content: string
-  if (typeof window !== 'undefined' && window.supertools?.fetchRemote) {
-    try {
-      content = await window.supertools.fetchRemote(url)
-    } catch (err) {
-      console.warn(`[remoteLoader] 主进程代理失败，尝试直接 fetch: ${url}`, err)
-      const response = await fetch(url)
-      if (!response.ok) {
-        throw new Error(`加载远程组件失败: HTTP ${response.status} - ${url}`)
-      }
-      content = await response.text()
-    }
-  } else {
-    const response = await fetch(url)
-    if (!response.ok) {
-      throw new Error(`加载远程组件失败: HTTP ${response.status} - ${url}`)
-    }
-    content = await response.text()
+  if (typeof window === 'undefined' || !window.supertools?.fetchRemote) {
+    throw new Error('远程工具必须通过主进程代理加载')
   }
+  content = await window.supertools.fetchRemote(url)
 
   // 写入缓存（内存 + 磁盘）
   memoryCache.set(url, content)
@@ -142,15 +130,13 @@ const sfcOptions = {
   },
 
   /**
-   * 安全策略：禁止远程组件 import 外部模块
+   * 安全策略：只允许 moduleCache 中随应用打包并审核过的模块。
    *
-   * 远程 .vue 组件在浏览器端运行时编译，不允许 import npm 包或外部文件。
-   * 远程组件只能使用 Vue 内置 API 和全局注册的 h- 组件。
-   * 需要 npm 包的功能请使用浏览器原生 API（如 Web Crypto API 替代 crypto-js）。
+   * 未列入白名单的 npm 包与所有远程文件 import 均拒绝加载。
    */
   async loadAdditionalModule(_url: string): Promise<never> {
     throw new Error(
-      '远程工具不支持 import 外部模块。请使用 Vue 内置 API 或浏览器原生 API。'
+      '远程工具请求了未授权模块。仅允许使用应用内置白名单模块。'
     )
   },
 

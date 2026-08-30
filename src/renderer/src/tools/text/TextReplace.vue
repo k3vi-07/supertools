@@ -16,7 +16,7 @@
         <h-checkbox v-model="caseSensitive" label="区分大小写" />
         <h-checkbox v-model="replaceAll" label="替换全部" />
       </div>
-      <h-text-transform sample-data="Hello World! Hello SuperTools!" :transform="replaceFn" />
+      <h-text-transform sample-data="Hello World! Hello SuperTools!" :transform="replaceFn" :refresh-key="[find, replace, useRegex, caseSensitive, replaceAll]" />
       <div v-if="replaceCount !== null" class="text-replace__count">
         替换了 {{ replaceCount }} 处
       </div>

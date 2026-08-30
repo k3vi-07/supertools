@@ -1,11 +1,19 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, shell, clipboard, Tray, Menu, nativeImage, net } from 'electron'
+import { app, BrowserWindow, globalShortcut, ipcMain as electronIpcMain, shell, clipboard, Tray, Menu, nativeImage } from 'electron'
 import { join } from 'path'
-import { readFileSync, writeFileSync, unlinkSync, existsSync, mkdirSync, readdirSync, rmSync } from 'fs'
+import { existsSync } from 'fs'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
-import { autoUpdater } from 'electron-updater'
+import { openRemoteToolWindow } from './remoteToolWindow'
+import { readRemoteCache, writeRemoteCache, deleteRemoteCache, clearRemoteCache } from './cacheService'
+import { createShortcutManager } from './shortcutManager'
+import { createIpcRegistry } from './ipcRegistry'
+import { setupUpdater } from './updaterService'
+import { fetchRemoteText } from './remoteService'
+import { fetchRemoteRegistry } from './remoteRegistryService'
+import { createCipheriv, createDecipheriv } from 'node:crypto'
 
 let mainWindow: BrowserWindow | null = null
 let searchWindow: BrowserWindow | null = null
+let remoteToolWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 
 /** 是否正在退出应用（用于区分关闭窗口和退出） */
@@ -18,6 +26,8 @@ let currentTheme: 'dark' | 'light' = 'dark'
 const isMac = process.platform === 'darwin'
 /** 是否 Windows */
 const isWin = process.platform === 'win32'
+const ipcMain = createIpcRegistry(electronIpcMain)
+const shortcutManager = createShortcutManager(isMac, () => toggleMainWindow(), () => showSearchWindow())
 
 /** 创建主窗口 */
 function createMainWindow(): BrowserWindow {
@@ -32,7 +42,7 @@ function createMainWindow(): BrowserWindow {
     backgroundColor: '#1a1a2e',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false,
+      sandbox: true,
       contextIsolation: true,
       nodeIntegration: false
     }
@@ -98,7 +108,7 @@ function createSearchWindow(): BrowserWindow {
     fullscreenable: false,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false,
+      sandbox: true,
       contextIsolation: true,
       nodeIntegration: false
     }
@@ -148,6 +158,21 @@ function hideSearchWindow(): void {
   }
 }
 
+/** 在独立 sandbox 窗口中打开远程工具，避免第三方组件进入主窗口组件树。 */
+function showRemoteToolWindow(toolId: string): void {
+  if (remoteToolWindow && !remoteToolWindow.isDestroyed()) {
+    remoteToolWindow.focus()
+    if (process.env['ELECTRON_RENDERER_URL']) {
+      remoteToolWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}/#/tool/${encodeURIComponent(toolId)}?isolated=1`)
+    } else {
+      remoteToolWindow.loadFile(join(__dirname, '../renderer/index.html'), { hash: `/tool/${encodeURIComponent(toolId)}?isolated=1` })
+    }
+    return
+  }
+  remoteToolWindow = openRemoteToolWindow(toolId)
+  remoteToolWindow.on('closed', () => { remoteToolWindow = null })
+}
+
 /** 显示/隐藏主窗口 */
 function toggleMainWindow(): void {
   if (!mainWindow) {
@@ -164,109 +189,6 @@ function toggleMainWindow(): void {
     mainWindow.show()
     mainWindow.focus()
   }
-}
-
-/** 默认快捷键配置 */
-const DEFAULT_SHORTCUTS = {
-  main: isMac ? 'Option+Space' : 'Alt+Space',
-  search: isMac ? 'Command+Shift+Space' : 'Ctrl+Shift+Space',
-  appSearch: isMac ? 'Command+K' : 'Ctrl+K'
-}
-
-/** 快捷键配置文件路径 */
-function getShortcutsPath(): string {
-  return join(app.getPath('userData'), 'shortcuts.json')
-}
-
-/** 当前生效的快捷键配置 */
-let currentShortcuts = { ...DEFAULT_SHORTCUTS }
-
-/** 加载快捷键配置 */
-function loadShortcuts(): typeof DEFAULT_SHORTCUTS {
-  try {
-    const filePath = getShortcutsPath()
-    if (existsSync(filePath)) {
-      const data = JSON.parse(readFileSync(filePath, 'utf-8'))
-      return { ...DEFAULT_SHORTCUTS, ...data }
-    }
-  } catch {
-    // 忽略
-  }
-  return { ...DEFAULT_SHORTCUTS }
-}
-
-/** 保存快捷键配置 */
-function saveShortcuts(shortcuts: typeof DEFAULT_SHORTCUTS): void {
-  try {
-    writeFileSync(getShortcutsPath(), JSON.stringify(shortcuts, null, 2), 'utf-8')
-  } catch {
-    // 忽略
-  }
-}
-
-/** 注册单个全局快捷键，返回是否成功 */
-function registerOne(accelerator: string, callback: () => void): boolean {
-  if (!accelerator) return true // 空值 = 禁用，视为成功
-  return globalShortcut.register(accelerator, callback)
-}
-
-/** 注销单个快捷键 */
-function unregisterOne(accelerator: string): void {
-  if (accelerator && globalShortcut.isRegistered(accelerator)) {
-    globalShortcut.unregister(accelerator)
-  }
-}
-
-/** 注册全局快捷键（从配置读取） */
-function registerShortcuts(): void {
-  currentShortcuts = loadShortcuts()
-
-  registerOne(currentShortcuts.main, () => {
-    toggleMainWindow()
-  })
-  registerOne(currentShortcuts.search, () => {
-    showSearchWindow()
-  })
-}
-
-/** 更新快捷键配置（unregister 旧的 → register 新的） */
-function updateShortcuts(
-  newShortcuts: Partial<typeof DEFAULT_SHORTCUTS>
-): { ok: boolean; error?: string } {
-  const oldShortcuts = { ...currentShortcuts }
-  const merged = { ...currentShortcuts, ...newShortcuts }
-
-  // 注销受影响的全局快捷键
-  if (newShortcuts.main !== undefined) {
-    unregisterOne(oldShortcuts.main)
-  }
-  if (newShortcuts.search !== undefined) {
-    unregisterOne(oldShortcuts.search)
-  }
-
-  // 尝试注册新的
-  if (newShortcuts.main !== undefined) {
-    if (!registerOne(merged.main, () => toggleMainWindow())) {
-      // 注册失败，回滚
-      registerOne(oldShortcuts.main, () => toggleMainWindow())
-      return { ok: false, error: `快捷键 "${merged.main}" 注册失败，可能被其他应用占用` }
-    }
-  }
-  if (newShortcuts.search !== undefined) {
-    if (!registerOne(merged.search, () => showSearchWindow())) {
-      // 注册失败，回滚
-      registerOne(oldShortcuts.main, () => toggleMainWindow()) // 确保新注册的也回滚
-      if (newShortcuts.main !== undefined) {
-        registerOne(oldShortcuts.main, () => toggleMainWindow())
-      }
-      registerOne(oldShortcuts.search, () => showSearchWindow())
-      return { ok: false, error: `快捷键 "${merged.search}" 注册失败，可能被其他应用占用` }
-    }
-  }
-
-  currentShortcuts = merged
-  saveShortcuts(merged)
-  return { ok: true }
 }
 
 /** 创建系统托盘 */
@@ -317,125 +239,19 @@ function createTray(): void {
   })
 }
 
-/** 获取远程工具缓存目录 */
-function getCacheDir(): string {
-  const dir = join(app.getPath('userData'), 'remote-tools')
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true })
-  }
-  return dir
-}
-
-/** 将 URL 安全转换为缓存文件名 */
-function urlToCacheKey(url: string): string {
-  // https://cdn.jsdelivr.net/gh/user/repo@version/path/to/File.vue
-  // → user_repo@version_path_to_File.vue
-  return url
-    .replace(/^https?:\/\/[^/]+\/gh\//, '')
-    .replace(/[/:]/g, '_')
-    .replace(/@/g, '_at_')
-}
-
-/** 配置自动更新 */
-function setupAutoUpdater(): void {
-  // 开发模式下使用 dev-app-update.yml
-  if (!app.isPackaged) {
-    autoUpdater.forceDevUpdateConfig = true
-  }
-
-  // 自动下载更新
-  autoUpdater.autoDownload = true
-  // 退出时自动安装已下载的更新
-  autoUpdater.autoInstallOnAppQuit = true
-
-  /** 向所有窗口推送更新事件 */
-  const sendUpdateEvent = (event: { type: string; info?: Record<string, unknown> }): void => {
-    const windows = BrowserWindow.getAllWindows()
-    for (const win of windows) {
-      win.webContents.send(IPC_CHANNELS.UPDATER_EVENT, event)
-    }
-  }
-
-  autoUpdater.on('checking-for-update', () => {
-    console.log('🔄 正在检查更新...')
-    sendUpdateEvent({ type: 'checking' })
-  })
-
-  autoUpdater.on('update-available', (info) => {
-    console.log('📦 发现新版本:', info.version)
-    sendUpdateEvent({
-      type: 'available',
-      info: {
-        version: info.version,
-        releaseNotes: info.releaseNotes,
-        releaseName: info.releaseName
-      }
-    })
-  })
-
-  autoUpdater.on('update-not-available', (info) => {
-    console.log('✅ 当前已是最新版本:', info.version)
-    sendUpdateEvent({ type: 'not-available' })
-  })
-
-  autoUpdater.on('download-progress', (progress) => {
-    console.log(`⬇️ 下载中: ${progress.percent.toFixed(1)}%`)
-    sendUpdateEvent({
-      type: 'progress',
-      info: {
-        percent: progress.percent,
-        transferred: progress.transferred,
-        total: progress.total
-      }
-    })
-  })
-
-  autoUpdater.on('update-downloaded', (info) => {
-    console.log('✅ 更新已下载:', info.version)
-    sendUpdateEvent({
-      type: 'downloaded',
-      info: { version: info.version }
-    })
-  })
-
-  autoUpdater.on('error', (err) => {
-    console.error('❌ 更新出错:', err.message)
-    sendUpdateEvent({
-      type: 'error',
-      info: { message: err.message }
-    })
-  })
-
-  // 手动检查更新
-  ipcMain.handle(IPC_CHANNELS.UPDATER_CHECK, async (): Promise<{ ok: boolean; error?: string }> => {
-    try {
-      await autoUpdater.checkForUpdates()
-      return { ok: true }
-    } catch (err) {
-      return { ok: false, error: (err as Error).message }
-    }
-  })
-
-  // 安装已下载的更新
-  ipcMain.on(IPC_CHANNELS.UPDATER_INSTALL, (): void => {
-    autoUpdater.quitAndInstall()
-  })
-
-  // 获取当前版本信息
-  ipcMain.handle(IPC_CHANNELS.UPDATER_GET_STATUS, (): { currentVersion: string } => {
-    return { currentVersion: app.getVersion() }
-  })
-
-  // 启动 10 秒后自动检查更新
-  setTimeout(() => {
-    autoUpdater.checkForUpdates().catch((err) => {
-      console.warn('自动检查更新失败:', err.message)
-    })
-  }, 10000)
-}
-
 /** 设置 IPC 处理器 */
 function setupIpcHandlers(): void {
+  ipcMain.handle(IPC_CHANNELS.CRYPTO_CAMELLIA_BLOCK, (_event, mode: string, keyHex: string, dataHex: string): string => {
+    if (mode !== 'encrypt' && mode !== 'decrypt') throw new Error('不支持的 Camellia 操作')
+    if (!/^(?:[0-9a-fA-F]{32}|[0-9a-fA-F]{48}|[0-9a-fA-F]{64})$/.test(keyHex)) throw new Error('Camellia 密钥必须为 128/192/256 位 Hex')
+    if (!/^[0-9a-fA-F]{32}$/.test(dataHex)) throw new Error('Camellia 数据必须为 128 位 Hex')
+    const algorithm = `camellia-${keyHex.length * 4}-ecb`
+    const transform = mode === 'encrypt'
+      ? createCipheriv(algorithm, Buffer.from(keyHex, 'hex'), null)
+      : createDecipheriv(algorithm, Buffer.from(keyHex, 'hex'), null)
+    transform.setAutoPadding(false)
+    return Buffer.concat([transform.update(Buffer.from(dataHex, 'hex')), transform.final()]).toString('hex')
+  })
   // 读取剪贴板
   ipcMain.handle(IPC_CHANNELS.CLIPBOARD_READ, (): string => {
     return clipboard.readText()
@@ -480,6 +296,11 @@ function setupIpcHandlers(): void {
     hideSearchWindow()
   })
 
+  ipcMain.on(IPC_CHANNELS.OPEN_REMOTE_TOOL, (_event, toolId: string): void => {
+    if (typeof toolId !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(toolId)) return
+    showRemoteToolWindow(toolId)
+  })
+
   // 用系统浏览器打开 URL
   ipcMain.handle(IPC_CHANNELS.SHELL_OPEN_EXTERNAL, (_event, url: string): Promise<void> => {
     let parsed: URL
@@ -510,213 +331,28 @@ function setupIpcHandlers(): void {
 
   // 获取当前快捷键配置
   ipcMain.handle(IPC_CHANNELS.SHORTCUT_GET, () => {
-    return currentShortcuts
+    return shortcutManager.get()
   })
 
   // 更新快捷键配置
   ipcMain.handle(IPC_CHANNELS.SHORTCUT_UPDATE, (_event, shortcuts: Record<string, string>) => {
-    return updateShortcuts(shortcuts)
+    return shortcutManager.update(shortcuts)
   })
-
-  // 远程文件获取（绕过 CORS，通过主进程 net 模块）
-  // 安全策略：域名白名单 + 响应大小限制 + 路径穿越检查
-  const ALLOWED_DOMAINS = new Set([
-    'cdn.jsdelivr.net',
-    'raw.githubusercontent.com',
-    'api.github.com',
-    'data.jsdelivr.com'
-  ])
-  const MAX_FETCH_SIZE = 5 * 1024 * 1024 // 5MB
-
-  /** 校验 URL 是否安全（域名白名单 + 路径穿越检查） */
-  function validateFetchUrl(url: string): { ok: boolean; error?: string } {
-    let parsed: URL
-    try {
-      parsed = new URL(url)
-    } catch {
-      return { ok: false, error: '无效的 URL' }
-    }
-    if (!ALLOWED_DOMAINS.has(parsed.hostname)) {
-      return { ok: false, error: `域名 ${parsed.hostname} 不在白名单中` }
-    }
-    // 路径穿越检查
-    if (parsed.pathname.includes('..') || parsed.pathname.includes('%2e')) {
-      return { ok: false, error: 'URL 路径包含非法字符' }
-    }
-    return { ok: true }
-  }
 
   ipcMain.handle(IPC_CHANNELS.REMOTE_FETCH, async (_event, url: string): Promise<{ ok: boolean; data?: string; error?: string; status?: number }> => {
-    try {
-      const urlCheck = validateFetchUrl(url)
-      if (!urlCheck.ok) {
-        return { ok: false, error: urlCheck.error }
-      }
-
-      const response = await net.fetch(url)
-      if (!response.ok) {
-        return { ok: false, error: `HTTP ${response.status}`, status: response.status }
-      }
-
-      // 响应大小限制
-      const contentLength = parseInt(response.headers.get('content-length') || '0', 10)
-      if (contentLength > MAX_FETCH_SIZE) {
-        return { ok: false, error: `响应过大 (${(contentLength / 1024 / 1024).toFixed(1)}MB)，上限 5MB` }
-      }
-
-      const data = await response.text()
-      if (data.length > MAX_FETCH_SIZE) {
-        return { ok: false, error: '响应数据超过 5MB 限制' }
-      }
-      return { ok: true, data, status: response.status }
-    } catch (err) {
-      return { ok: false, error: (err as Error).message }
-    }
+    return fetchRemoteText(url)
   })
 
-  // 获取远程仓库 registry.json
-  // repo 格式: 'user/repo' 或 'user/repo@version'
-  //
-  // 缓存策略（根治 CDN 缓存过期问题）：
-  //   1. 先通过 GitHub API 获取 master 分支最新 commit hash
-  //   2. 用 commit hash 构建 CDN URL（commit hash 不可变，CDN 缓存永远正确）
-  //   3. GitHub API 失败时，回退到 latest/master/main 并行请求，取工具数最多的
-  // 安全：owner 格式校验 + registry 大小限制 + commit hash 校验
-  const MAX_REGISTRY_SIZE = 1024 * 1024 // 1MB
-  const REPO_REGEX = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/
-  const COMMIT_HASH_REGEX = /^[a-f0-9]{40}$/
-
-  ipcMain.handle(IPC_CHANNELS.REMOTE_FETCH_REGISTRY, async (_event, repo: string): Promise<{ ok: boolean; data?: unknown; error?: string }> => {
-    try {
-      // 解析 repo 和 version
-      let owner = repo
-      let version = ''
-      const atIndex = repo.lastIndexOf('@')
-      if (atIndex > 0) {
-        owner = repo.substring(0, atIndex)
-        version = repo.substring(atIndex + 1)
-      }
-
-      // 安全校验：owner 格式必须是 用户名/仓库名
-      if (!REPO_REGEX.test(owner)) {
-        return { ok: false, error: `无效的仓库地址: ${owner}` }
-      }
-
-      /** 带超时的 fetch */
-      const fetchWithTimeout = async (url: string, timeoutMs = 10000): Promise<Response | null> => {
-        const controller = new AbortController()
-        const timer = setTimeout(() => controller.abort(), timeoutMs)
-        try {
-          const resp = await net.fetch(url, { signal: controller.signal as never })
-          clearTimeout(timer)
-          return resp
-        } catch {
-          clearTimeout(timer)
-          return null
-        }
-      }
-
-      /** 获取指定分支最新 commit hash（用于构建不可变 CDN URL） */
-      const getLatestCommitHash = async (branch: string): Promise<string | null> => {
-        try {
-          const resp = await fetchWithTimeout(
-            `https://api.github.com/repos/${owner}/commits/${branch}`,
-            8000
-          )
-          if (resp && resp.ok) {
-            const data = await resp.json() as { sha?: string }
-            const sha = data.sha || ''
-            // 安全校验：commit hash 必须是 40 字符 hex
-            if (sha && COMMIT_HASH_REGEX.test(sha)) {
-              return sha
-            }
-          }
-        } catch {
-          // 网络问题，回退
-        }
-        return null
-      }
-
-      /** 从 URL 获取 registry 数据（含大小限制） */
-      const fetchRegistry = async (url: string): Promise<{ data: { tools: unknown[] } | null; count: number; error: string }> => {
-        try {
-          const response = await fetchWithTimeout(url)
-          if (response && response.ok) {
-            // 大小限制：registry.json 不应超过 1MB
-            const contentLength = parseInt(response.headers.get('content-length') || '0', 10)
-            if (contentLength > MAX_REGISTRY_SIZE) {
-              return { data: null, count: 0, error: 'registry.json 过大 (>1MB)' }
-            }
-            const text = await response.text()
-            if (text.length > MAX_REGISTRY_SIZE) {
-              return { data: null, count: 0, error: 'registry.json 超过 1MB 限制' }
-            }
-            const data = JSON.parse(text) as { tools?: unknown[] }
-            const count = Array.isArray(data?.tools) ? data.tools.length : 0
-            return { data: data as { tools: unknown[] }, count, error: '' }
-          }
-          return { data: null, count: 0, error: `HTTP ${response?.status || 'unknown'}` }
-        } catch (err) {
-          return { data: null, count: 0, error: (err as Error).message }
-        }
-      }
-
-      // ---- 第一步：尝试用 commit hash 获取（根治 CDN 缓存问题）----
-      const branch = version || 'master'
-      const commitHash = await getLatestCommitHash(branch)
-
-      const sources: string[] = []
-      if (commitHash) {
-        // 用 commit hash 构建 URL — 不可变，CDN 缓存永远正确
-        sources.push(`https://cdn.jsdelivr.net/gh/${owner}@${commitHash}/registry.json`)
-        sources.push(`https://raw.githubusercontent.com/${owner}/${commitHash}/registry.json`)
-      }
-
-      // ---- 第二步：回退源（commit hash 获取失败或作为补充）----
-      const refs = version ? [version] : ['latest', 'master', 'main']
-      for (const r of refs) {
-        sources.push(`https://cdn.jsdelivr.net/gh/${owner}@${r}/registry.json`)
-        sources.push(`https://raw.githubusercontent.com/${owner}/${r}/registry.json`)
-      }
-
-      // 并行请求所有源，取工具数最多的结果
-      const fetchPromises = sources.map((url) => fetchRegistry(url))
-      const results = await Promise.all(fetchPromises)
-
-      let bestData: { tools: unknown[] } | null = null
-      let bestCount = 0
-      let lastError = ''
-      for (const result of results) {
-        if (result.count > bestCount) {
-          bestCount = result.count
-          bestData = result.data
-        }
-        if (!lastError && result.error) {
-          lastError = result.error
-        }
-      }
-
-      if (bestData) {
-        return { ok: true, data: bestData }
-      }
-      return { ok: false, error: `无法获取仓库清单 (${lastError})` }
-    } catch (err) {
-      return { ok: false, error: (err as Error).message }
-    }
-  })
+  // registry 获取由独立服务负责。
+  ipcMain.handle(IPC_CHANNELS.REMOTE_FETCH_REGISTRY, (_event, repo: string) => fetchRemoteRegistry(repo))
 
   // ===== 远程组件本地缓存 =====
 
   // 读取缓存的组件源码
   ipcMain.handle(IPC_CHANNELS.REMOTE_CACHE_READ, (_event, key: string): { ok: boolean; data?: string } => {
     try {
-      const safeKey = urlToCacheKey(key)
-      const filePath = join(getCacheDir(), safeKey)
-      if (existsSync(filePath)) {
-        const data = readFileSync(filePath, 'utf-8')
-        return { ok: true, data }
-      }
-      return { ok: false }
+      const data = readRemoteCache(key)
+      return data === null ? { ok: false } : { ok: true, data }
     } catch {
       return { ok: false }
     }
@@ -725,10 +361,7 @@ function setupIpcHandlers(): void {
   // 写入组件源码到缓存
   ipcMain.handle(IPC_CHANNELS.REMOTE_CACHE_WRITE, (_event, key: string, content: string): { ok: boolean } => {
     try {
-      const safeKey = urlToCacheKey(key)
-      const filePath = join(getCacheDir(), safeKey)
-      writeFileSync(filePath, content, 'utf-8')
-      return { ok: true }
+      return { ok: writeRemoteCache(key, content) }
     } catch {
       return { ok: false }
     }
@@ -737,12 +370,7 @@ function setupIpcHandlers(): void {
   // 删除单个缓存
   ipcMain.handle(IPC_CHANNELS.REMOTE_CACHE_DELETE, (_event, key: string): { ok: boolean } => {
     try {
-      const safeKey = urlToCacheKey(key)
-      const filePath = join(getCacheDir(), safeKey)
-      if (existsSync(filePath)) {
-        unlinkSync(filePath)
-      }
-      return { ok: true }
+      return { ok: deleteRemoteCache(key) }
     } catch {
       return { ok: false }
     }
@@ -751,13 +379,7 @@ function setupIpcHandlers(): void {
   // 清空所有缓存
   ipcMain.handle(IPC_CHANNELS.REMOTE_CACHE_CLEAR, (): { ok: boolean } => {
     try {
-      const dir = getCacheDir()
-      if (existsSync(dir)) {
-        for (const file of readdirSync(dir)) {
-          unlinkSync(join(dir, file))
-        }
-      }
-      return { ok: true }
+      return { ok: clearRemoteCache() }
     } catch {
       return { ok: false }
     }
@@ -773,9 +395,9 @@ app.whenReady().then((): void => {
   createMainWindow()
   createSearchWindow()
   createTray()
-  registerShortcuts()
+  shortcutManager.registerAll()
   setupIpcHandlers()
-  setupAutoUpdater()
+  setupUpdater(ipcMain)
 
   app.on('activate', (): void => {
     if (BrowserWindow.getAllWindows().length === 0) {

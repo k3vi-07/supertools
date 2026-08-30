@@ -14,6 +14,7 @@ export const IPC_CHANNELS = {
   HIDE_SEARCH_OVERLAY: 'window:hide-search',
   /** 导航到指定工具 */
   NAVIGATE_TO_TOOL: 'navigate:tool',
+  OPEN_REMOTE_TOOL: 'remote:open-tool',
   /** 用系统浏览器打开 URL */
   SHELL_OPEN_EXTERNAL: 'shell:open-external',
   /** 获取平台信息 */
@@ -32,6 +33,8 @@ export const IPC_CHANNELS = {
   REMOTE_CACHE_DELETE: 'remote:cache-delete',
   /** 清空所有远程组件缓存 */
   REMOTE_CACHE_CLEAR: 'remote:cache-clear',
+  /** 标准 Camellia 单块 ECB 运算（主进程 OpenSSL） */
+  CRYPTO_CAMELLIA_BLOCK: 'crypto:camellia-block',
   /** 手动检查更新 */
   UPDATER_CHECK: 'updater:check',
   /** 安装已下载的更新 */

@@ -1,32 +1,23 @@
 <template>
   <h-single-layout>
     <div class="yaml-json">
-      <div class="yaml-json__options">
-        <h-radio
-          v-model="direction"
-          :options="[
-            { label: 'YAML → JSON', value: 'toJSON' },
-            { label: 'JSON → YAML', value: 'toYAML' }
-          ]"
-          size="small"
-        />
-      </div>
-      <h-transform
-        left-title="输入"
-        right-title="输出"
-        input-lang="yaml"
-        output-lang="json"
-        :sample-data="direction === 'toJSON' ? yamlSample : jsonSample"
-        :input-handler="convertFn"
+      <h-text-transform
+        :sample-data="yamlSample"
+        :enable-reverse="true"
+        :transform="yamlToJson"
+        :reverse-transform="jsonToYaml"
+        forward-label="YAML → JSON"
+        reverse-label="JSON → YAML"
+        forward-input-title="YAML"
+        forward-output-title="JSON"
+        reverse-input-title="JSON"
+        reverse-output-title="YAML"
       />
     </div>
   </h-single-layout>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-
-const direction = ref<'toJSON' | 'toYAML'>('toJSON')
 const yamlSample = `name: SuperTools
 version: 1.0.0
 isOpenSource: true
@@ -37,14 +28,6 @@ features:
 author:
   name: Dev
   email: dev@example.com`
-
-const jsonSample = JSON.stringify({
-  name: 'SuperTools',
-  version: '1.0.0',
-  isOpenSource: true,
-  features: ['搜索', '剪贴板识别', '个性化主页'],
-  author: { name: 'Dev', email: 'dev@example.com' }
-}, null, 2)
 
 /** 简易 YAML → JSON 转换器（支持基本缩进结构） */
 function yamlToJson(yaml: string): string {
@@ -173,13 +156,6 @@ function toYaml(data: unknown, indent: number): string {
   }).join('\n')
 }
 
-function convertFn(input: string): string {
-  try {
-    return direction.value === 'toJSON' ? yamlToJson(input) : jsonToYaml(input)
-  } catch (err) {
-    return `❌ 转换失败: ${(err as Error).message}`
-  }
-}
 </script>
 
 <style scoped lang="less">

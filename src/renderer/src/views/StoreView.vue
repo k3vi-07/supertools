@@ -1,16 +1,30 @@
 <template>
   <div class="store-view">
-    <h1 class="store-view__title">{{ t('store.title') }}</h1>
-    <p class="store-view__subtitle">{{ t('store.subtitle') }}</p>
+    <header class="store-view__header">
+      <div>
+        <h1 class="store-view__title">{{ t('store.title') }}</h1>
+        <p class="store-view__subtitle">{{ t('store.subtitle') }}</p>
+      </div>
+      <div v-if="remoteToolsStore.repos.length > 0" class="store-view__stats" aria-live="polite">
+        <span>{{ t('store.reposSummary', { count: remoteToolsStore.repos.length }) }}</span>
+        <span>{{ t('store.installedSummary', { count: remoteToolsStore.installedCount }) }}</span>
+      </div>
+    </header>
 
     <!-- 添加仓库 -->
-    <div class="store-view__add-repo">
+    <div class="store-view__add-repo" :aria-busy="addingRepo">
+      <label class="sr-only" for="repo-address">{{ t('store.repoAddress') }}</label>
       <h-input
+        id="repo-address"
         v-model="newRepoInput"
         :placeholder="t('store.addPlaceholder')"
+        :readonly="addingRepo"
         @keydown.enter="handleAddRepo"
       />
-      <h-button type="primary" @click="handleAddRepo">{{ t('store.addRepo') }}</h-button>
+      <h-button type="primary" :disabled="addingRepo || !newRepoInput.trim()" @click="handleAddRepo">
+        <h-icon v-if="addingRepo" icon="mdi:loading mdi-spin" :size="14" />
+        {{ addingRepo ? t('store.addingRepo') : t('store.addRepo') }}
+      </h-button>
     </div>
     <p class="store-view__hint">{{ t('store.repoHint') }}</p>
 
@@ -22,8 +36,28 @@
           v-model="searchQuery"
           class="store-view__search-input"
           :placeholder="t('store.searchPlaceholder')"
+          :aria-label="t('store.searchPlaceholder')"
         />
+        <button
+          v-if="searchQuery"
+          class="store-view__clear-search"
+          type="button"
+          :aria-label="t('store.clearSearch')"
+          :title="t('store.clearSearch')"
+          @click="searchQuery = ''"
+        >
+          <h-icon icon="mdi:close" :size="14" />
+        </button>
       </div>
+
+      <label class="store-view__sort">
+        <span>{{ t('store.sortBy') }}</span>
+        <select v-model="sortBy" :aria-label="t('store.sortBy')">
+          <option value="installed">{{ t('store.sortInstalled') }}</option>
+          <option value="name">{{ t('store.sortName') }}</option>
+          <option value="recent">{{ t('store.sortRecent') }}</option>
+        </select>
+      </label>
 
       <div class="store-view__actions">
         <h-button
@@ -40,9 +74,10 @@
           size="small"
           type="primary"
           :icon="'mdi:update'"
+          :disabled="updatingAll"
           @click="handleUpdateAll"
         >
-          {{ t('store.updateAll') }}
+          {{ updatingAll ? t('store.updating') : t('store.updateAll') }}
         </h-button>
         <h-button size="small" :icon="'mdi:download'" @click="handleExport">{{ t('store.exportList') }}</h-button>
         <h-button size="small" :icon="'mdi:upload'" @click="triggerImport">{{ t('store.importList') }}</h-button>
@@ -52,22 +87,18 @@
 
     <!-- 分类筛选 -->
     <div v-if="remoteToolsStore.repos.length > 0" class="store-view__filters">
-      <div
+      <button
         v-for="cat in filterCategories"
         :key="cat.id"
         class="store-view__filter-tag"
         :class="{ active: activeCategory === cat.id }"
+        type="button"
+        :aria-pressed="activeCategory === cat.id"
         @click="activeCategory = cat.id"
       >
         {{ cat.id === 'all' ? t('store.filterAll') : cat.name }}
         <span v-if="cat.count > 0" class="store-view__filter-count">{{ cat.count }}</span>
-      </div>
-    </div>
-
-    <!-- 已安装统计 -->
-    <div v-if="remoteToolsStore.installedCount > 0" class="store-view__summary">
-      <h-icon icon="mdi:check-circle" :size="14" color="var(--color-success)" />
-      <span>{{ t('store.installedSummary', { count: remoteToolsStore.installedCount }) }}</span>
+      </button>
     </div>
 
     <!-- 空状态 -->
@@ -89,11 +120,24 @@
             <span class="store-card__tool-count">{{ t('store.toolsCount', { count: (repoTools[repo.id] || []).length }) }}</span>
           </div>
           <div class="store-card__actions">
-            <button class="store-card__btn store-card__btn--refresh" @click="refreshRepo(repo.id)">
-              <h-icon icon="mdi:refresh" :size="14" />
+            <button
+              class="store-card__btn store-card__btn--refresh"
+              type="button"
+              :disabled="loadingRepos[repo.id]"
+              :aria-label="t('store.refreshRepo', { name: repo.name })"
+              :title="t('store.refresh')"
+              @click="refreshRepo(repo.id)"
+            >
+              <h-icon :icon="loadingRepos[repo.id] ? 'mdi:loading mdi-spin' : 'mdi:refresh'" :size="16" />
             </button>
-            <button class="store-card__btn store-card__btn--remove" @click="removeRepo(repo.id)">
-              <h-icon icon="mdi:close" :size="14" />
+            <button
+              class="store-card__btn store-card__btn--remove"
+              type="button"
+              :aria-label="t('store.removeRepo', { name: repo.name })"
+              :title="t('store.remove')"
+              @click="requestRemoveRepo(repo.id)"
+            >
+              <h-icon icon="mdi:trash-can-outline" :size="16" />
             </button>
           </div>
         </div>
@@ -105,9 +149,10 @@
         </div>
 
         <!-- 加载失败 -->
-        <div v-else-if="loadErrors[repo.id]" class="store-card__error" @click="refreshRepo(repo.id)">
+        <div v-else-if="loadErrors[repo.id]" class="store-card__error" role="alert">
           <h-icon icon="mdi:alert-circle-outline" :size="20" color="var(--color-error)" />
           <span>{{ t('store.loadFailed') }}</span>
+          <h-button size="small" @click="refreshRepo(repo.id)">{{ t('store.retry') }}</h-button>
         </div>
 
         <!-- 空仓库 -->
@@ -129,15 +174,17 @@
               size="small"
               type="primary"
               :icon="'mdi:download-multiple'"
+              :disabled="repoActions[repo.id] === 'install'"
               @click="handleInstallAll(repo.id)"
             >
-              {{ t('store.installAll') }}
+              {{ repoActions[repo.id] === 'install' ? t('store.installing') : t('store.installAll') }}
             </h-button>
             <h-button
               v-if="anyToolInstalled(repo.id)"
               size="small"
               :icon="'mdi:trash-can-outline'"
-              @click="handleUninstallAll(repo.id)"
+              :disabled="repoActions[repo.id] === 'uninstall'"
+              @click="requestUninstallAll(repo.id)"
             >
               {{ t('store.uninstallAll') }}
             </h-button>
@@ -156,13 +203,15 @@
               <div class="tool-item__name-row">
                 <span class="tool-item__name">{{ tool.nameZh }}</span>
                 <span v-if="tool.version" class="tool-item__version">v{{ tool.version }}</span>
-                <span
+                <button
                   v-if="remoteToolsStore.isOutdated(tool.id)"
                   class="tool-item__update-badge"
+                  type="button"
+                  :disabled="toolActions[tool.id] === 'update'"
                   @click.stop="handleUpdateTool(tool)"
                 >
                   {{ t('store.hasUpdate') }}
-                </span>
+                </button>
               </div>
               <div class="tool-item__desc">{{ tool.description }}</div>
               <div class="tool-item__meta">
@@ -182,6 +231,9 @@
                 <button
                   class="tool-item__rate-btn"
                   :class="{ active: remoteToolsStore.getRating(tool.id) === 'like' }"
+                  type="button"
+                  :aria-label="t('store.likeTool', { name: tool.nameZh })"
+                  :aria-pressed="remoteToolsStore.getRating(tool.id) === 'like'"
                   @click.stop="remoteToolsStore.setRating(tool.id, 'like')"
                 >
                   <h-icon icon="mdi:thumb-up-outline" :size="14" />
@@ -189,6 +241,9 @@
                 <button
                   class="tool-item__rate-btn"
                   :class="{ active: remoteToolsStore.getRating(tool.id) === 'dislike' }"
+                  type="button"
+                  :aria-label="t('store.dislikeTool', { name: tool.nameZh })"
+                  :aria-pressed="remoteToolsStore.getRating(tool.id) === 'dislike'"
                   @click.stop="remoteToolsStore.setRating(tool.id, 'dislike')"
                 >
                   <h-icon icon="mdi:thumb-down-outline" :size="14" />
@@ -199,21 +254,26 @@
               <button
                 v-if="!remoteToolsStore.isInstalled(tool.id)"
                 class="tool-item__btn tool-item__btn--install"
+                type="button"
+                :disabled="toolActions[tool.id] === 'install'"
                 @click="installTool(tool, repo.id)"
               >
-                {{ t('store.install') }}
+                {{ toolActions[tool.id] === 'install' ? t('store.installing') : t('store.install') }}
               </button>
               <button
                 v-else-if="remoteToolsStore.isOutdated(tool.id)"
                 class="tool-item__btn tool-item__btn--update"
+                type="button"
+                :disabled="toolActions[tool.id] === 'update'"
                 @click="handleUpdateTool(tool)"
               >
-                {{ t('store.update') }}
+                {{ toolActions[tool.id] === 'update' ? t('store.updating') : t('store.update') }}
               </button>
               <button
                 v-else
                 class="tool-item__btn tool-item__btn--uninstall"
-                @click="uninstallTool(tool.id)"
+                type="button"
+                @click="requestUninstallTool(tool)"
               >
                 {{ t('store.uninstall') }}
               </button>
@@ -222,11 +282,32 @@
         </div>
       </div>
     </div>
+
+    <div v-if="confirmation" class="store-confirm" role="presentation" @click.self="closeConfirmation">
+      <section
+        class="store-confirm__dialog"
+        role="alertdialog"
+        aria-modal="true"
+        :aria-labelledby="'store-confirm-title'"
+        :aria-describedby="'store-confirm-description'"
+        @keydown.esc="closeConfirmation"
+      >
+        <div class="store-confirm__icon"><h-icon icon="mdi:alert-outline" :size="22" /></div>
+        <div class="store-confirm__content">
+          <h2 id="store-confirm-title">{{ confirmation.title }}</h2>
+          <p id="store-confirm-description">{{ confirmation.description }}</p>
+        </div>
+        <div class="store-confirm__actions">
+          <h-button @click="closeConfirmation">{{ t('store.cancel') }}</h-button>
+          <button class="store-confirm__danger" type="button" @click="confirmAction">{{ confirmation.confirmLabel }}</button>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRemoteToolsStore } from '../stores/remoteTools'
 import { useToolsStore } from '../stores/tools'
@@ -247,6 +328,16 @@ const repoTools = reactive<Record<string, RemoteToolEntry[]>>({})
 const loadingRepos = reactive<Record<string, boolean>>({})
 const loadErrors = reactive<Record<string, boolean>>({})
 const importInputRef = ref<HTMLInputElement>()
+const addingRepo = ref(false)
+const updatingAll = ref(false)
+const toolActions = reactive<Record<string, 'install' | 'update' | undefined>>({})
+const repoActions = reactive<Record<string, 'install' | 'uninstall' | undefined>>({})
+const confirmation = ref<{
+  title: string
+  description: string
+  confirmLabel: string
+  action: () => void | Promise<void>
+} | null>(null)
 
 /** 获取分类名称 */
 function getCategoryName(categoryId: string): string {
@@ -329,25 +420,35 @@ function anyToolInstalled(repoId: string): boolean {
 
 /** 添加仓库 */
 async function handleAddRepo(): Promise<void> {
+  if (addingRepo.value) return
   const input = newRepoInput.value.trim()
   if (!input) return
-  if (!input.includes('/')) {
-    window.$he3?.message.error('请输入有效的 GitHub 仓库地址')
-    return
-  }
 
-  let repoId = input
+  const repoId = input
     .replace(/^https?:\/\/github\.com\//, '')
     .replace(/\.git$/, '')
     .replace(/\/$/, '')
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repoId)) {
+    window.$he3?.message.error(t('store.invalidRepo'))
+    return
+  }
 
-  const success = await remoteToolsStore.addRepo(repoId)
-  if (success) {
-    newRepoInput.value = ''
-    await loadRepoTools(repoId)
-    window.$he3?.message.success('仓库添加成功')
-  } else {
-    window.$he3?.message.error('添加失败，请检查仓库地址或网络')
+  addingRepo.value = true
+  try {
+    const success = await remoteToolsStore.addRepo(repoId)
+    if (success) {
+      newRepoInput.value = ''
+      await loadRepoTools(repoId)
+      window.$he3?.message.success(t('store.repoAdded'))
+    } else {
+      window.$he3?.message.error(
+        remoteToolsStore.repos.some((repo) => repo.id === repoId)
+          ? t('store.repoExists')
+          : t('store.addFailed')
+      )
+    }
+  } finally {
+    addingRepo.value = false
   }
 }
 
@@ -371,33 +472,85 @@ async function refreshRepo(repoId: string): Promise<void> {
   await loadRepoTools(repoId)
 }
 
-/** 移除仓库 */
+/** 移除仓库（store 会同时卸载来源于该仓库的工具） */
 function removeRepo(repoId: string): void {
   remoteToolsStore.removeRepo(repoId)
   delete repoTools[repoId]
   refreshToolList()
-  window.$he3?.message.info('已移除仓库')
+  window.$he3?.message.info(t('store.repoRemoved'))
+}
+
+function openConfirmation(options: NonNullable<typeof confirmation.value>): void {
+  confirmation.value = options
+  void nextTick(() => {
+    document.querySelector<HTMLButtonElement>('.store-confirm__dialog button')?.focus()
+  })
+}
+
+function closeConfirmation(): void {
+  confirmation.value = null
+}
+
+async function confirmAction(): Promise<void> {
+  const action = confirmation.value?.action
+  confirmation.value = null
+  await action?.()
+}
+
+function requestRemoveRepo(repoId: string): void {
+  const repo = remoteToolsStore.repos.find((item) => item.id === repoId)
+  if (!repo) return
+  const installedCount = remoteToolsStore.installedTools.filter((tool) => tool.sourceRepo === repoId).length
+  openConfirmation({
+    title: t('store.removeRepoTitle'),
+    description: installedCount > 0
+      ? t('store.removeRepoWithTools', { name: repo.name, count: installedCount })
+      : t('store.removeRepoDescription', { name: repo.name }),
+    confirmLabel: t('store.remove'),
+    action: () => removeRepo(repoId)
+  })
 }
 
 /** 安装工具 */
-function installTool(tool: RemoteToolEntry, repoId: string): void {
-  remoteToolsStore.installTool(tool, repoId)
-  refreshToolList()
-  window.$he3?.message.success(t('store.installSuccess', { name: tool.nameZh }))
+async function installTool(tool: RemoteToolEntry, repoId: string): Promise<void> {
+  if (toolActions[tool.id]) return
+  toolActions[tool.id] = 'install'
+  try {
+    const success = await remoteToolsStore.installTool(tool, repoId)
+    if (success) refreshToolList()
+    window.$he3?.message[success ? 'success' : 'error'](success ? t('store.installSuccess', { name: tool.nameZh }) : t('store.installFailed'))
+  } finally {
+    delete toolActions[tool.id]
+  }
 }
 
 /** 卸载工具 */
-function uninstallTool(toolId: string): void {
-  remoteToolsStore.uninstallTool(toolId)
+function uninstallTool(tool: RemoteToolEntry): void {
+  remoteToolsStore.uninstallTool(tool.id)
   refreshToolList()
-  window.$he3?.message.info(t('store.uninstallSuccess', { name: toolId }))
+  window.$he3?.message.info(t('store.uninstallSuccess', { name: tool.nameZh }))
+}
+
+function requestUninstallTool(tool: RemoteToolEntry): void {
+  openConfirmation({
+    title: t('store.uninstallToolTitle'),
+    description: t('store.uninstallToolDescription', { name: tool.nameZh }),
+    confirmLabel: t('store.uninstall'),
+    action: () => uninstallTool(tool)
+  })
 }
 
 /** 安装仓库全部工具 */
 async function handleInstallAll(repoId: string): Promise<void> {
-  const count = await remoteToolsStore.installAllFromRepo(repoId)
-  refreshToolList()
-  window.$he3?.message.success(t('store.installAllSuccess', { count }))
+  if (repoActions[repoId]) return
+  repoActions[repoId] = 'install'
+  try {
+    const count = await remoteToolsStore.installAllFromRepo(repoId)
+    refreshToolList()
+    window.$he3?.message.success(t('store.installAllSuccess', { count }))
+  } finally {
+    delete repoActions[repoId]
+  }
 }
 
 /** 卸载仓库全部工具 */
@@ -407,32 +560,67 @@ function handleUninstallAll(repoId: string): void {
   window.$he3?.message.info(t('store.uninstallAllSuccess', { count }))
 }
 
+function requestUninstallAll(repoId: string): void {
+  const repo = remoteToolsStore.repos.find((item) => item.id === repoId)
+  const count = remoteToolsStore.installedTools.filter((tool) => tool.sourceRepo === repoId).length
+  if (!repo || count === 0) return
+  openConfirmation({
+    title: t('store.uninstallAllTitle'),
+    description: t('store.uninstallAllDescription', { name: repo.name, count }),
+    confirmLabel: t('store.uninstallAll'),
+    action: async () => {
+      repoActions[repoId] = 'uninstall'
+      try {
+        handleUninstallAll(repoId)
+      } finally {
+        delete repoActions[repoId]
+      }
+    }
+  })
+}
+
 /** 检查更新 */
 async function handleCheckUpdates(): Promise<void> {
   const outdated = await remoteToolsStore.checkUpdates()
   if (outdated.length === 0) {
     window.$he3?.message.success(t('store.noUpdates'))
   } else {
-    window.$he3?.message.info(`发现 ${outdated.length} 个可更新工具`)
+    window.$he3?.message.info(t('store.updatesFound', { count: outdated.length }))
   }
 }
 
 /** 更新单个工具 */
-function handleUpdateTool(tool: RemoteToolEntry): void {
+async function handleUpdateTool(tool: RemoteToolEntry): Promise<void> {
+  if (toolActions[tool.id]) return
   const installed = remoteToolsStore.installedTools.find((i) => i.id === tool.id)
   if (installed) {
-    remoteToolsStore.installTool(tool, installed.sourceRepo)
-    remoteToolsStore.outdatedTools = remoteToolsStore.outdatedTools.filter((i) => i.toolId !== tool.id)
-    refreshToolList()
-    window.$he3?.message.success(t('store.updateSuccess'))
+    toolActions[tool.id] = 'update'
+    try {
+      const success = await remoteToolsStore.installTool(tool, installed.sourceRepo)
+      if (!success) {
+        window.$he3?.message.error(t('store.updateFailed'))
+        return
+      }
+      remoteToolsStore.outdatedTools = remoteToolsStore.outdatedTools.filter((i) => i.toolId !== tool.id)
+      refreshToolList()
+      window.$he3?.message.success(t('store.updateSuccess'))
+    } finally {
+      delete toolActions[tool.id]
+    }
   }
 }
 
 /** 更新全部 */
-function handleUpdateAll(): void {
-  const count = remoteToolsStore.updateAll()
-  refreshToolList()
-  window.$he3?.message.success(t('store.updateAllSuccess', { count }))
+async function handleUpdateAll(): Promise<void> {
+  if (updatingAll.value) return
+  updatingAll.value = true
+  try {
+    const count = await remoteToolsStore.updateAll()
+    refreshToolList()
+    window.$he3?.message.success(t('store.updateAllSuccess', { count }))
+  } finally {
+    updatingAll.value = false
+  }
 }
 
 /** 导出已安装列表 */
@@ -474,35 +662,61 @@ function refreshToolList(): void {
 }
 
 onMounted(async () => {
-  for (const repo of remoteToolsStore.repos) {
-    await loadRepoTools(repo.id)
-  }
+  await Promise.all(remoteToolsStore.repos.map((repo) => loadRepoTools(repo.id)))
 })
 </script>
 
 <style scoped lang="less">
 .store-view {
   padding: 24px;
-  max-width: 900px;
+  max-width: 1040px;
   margin: 0 auto;
+
+  &__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 20px;
+  }
 
   &__title {
     font-size: 20px;
     font-weight: 700;
     color: var(--text-primary);
-    margin-bottom: 4px;
+    margin: 0 0 4px;
   }
 
   &__subtitle {
     font-size: 13px;
     color: var(--text-secondary);
-    margin-bottom: 20px;
+    margin: 0;
+  }
+
+  &__stats {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+
+    span {
+      padding: 5px 9px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      background: var(--bg-surface);
+      font-size: 12px;
+    }
   }
 
   &__add-repo {
     display: flex;
     gap: 8px;
     margin-bottom: 8px;
+
+    :deep(.h-input) {
+      flex: 1;
+      min-width: 0;
+    }
   }
 
   &__hint {
@@ -527,7 +741,8 @@ onMounted(async () => {
     gap: 6px;
     flex: 1;
     min-width: 200px;
-    padding: 6px 12px;
+    min-height: 34px;
+    padding: 0 8px 0 12px;
     background: var(--bg-surface);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
@@ -543,6 +758,51 @@ onMounted(async () => {
 
     &::placeholder {
       color: var(--text-tertiary);
+    }
+  }
+
+  &__clear-search {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--text-tertiary);
+    background: transparent;
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      color: var(--text-primary);
+      background: var(--bg-hover);
+    }
+  }
+
+  &__sort {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 34px;
+    padding: 0 9px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-tertiary);
+    background: var(--bg-surface);
+    font-size: 12px;
+
+    select {
+      border: 0;
+      outline: 0;
+      color: var(--text-primary);
+      background: transparent;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    &:focus-within {
+      border-color: var(--color-primary);
     }
   }
 
@@ -587,6 +847,7 @@ onMounted(async () => {
     color: var(--text-secondary);
     cursor: pointer;
     transition: all var(--transition-fast);
+    font-family: inherit;
 
     &:hover {
       border-color: var(--color-primary);
@@ -603,15 +864,6 @@ onMounted(async () => {
   &__filter-count {
     font-size: 10px;
     opacity: 0.8;
-  }
-
-  &__summary {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 0;
-    font-size: 12px;
-    color: var(--text-secondary);
   }
 
   &__empty {
@@ -651,6 +903,8 @@ onMounted(async () => {
     align-items: center;
     gap: 8px;
     color: var(--text-secondary);
+    min-width: 0;
+    flex-wrap: wrap;
   }
 
   &__repo-name {
@@ -682,8 +936,8 @@ onMounted(async () => {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
     border: none;
     background: transparent;
     color: var(--text-tertiary);
@@ -698,6 +952,16 @@ onMounted(async () => {
 
     &--remove:hover {
       color: var(--color-error);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 1px;
+    }
+
+    &:disabled {
+      opacity: 0.55;
+      cursor: wait;
     }
   }
 
@@ -714,7 +978,6 @@ onMounted(async () => {
   }
 
   &__error {
-    cursor: pointer;
     color: var(--color-error);
   }
 
@@ -785,6 +1048,7 @@ onMounted(async () => {
   }
 
   &__update-badge {
+    border: 0;
     font-size: 10px;
     color: white;
     background: var(--color-warning);
@@ -792,9 +1056,15 @@ onMounted(async () => {
     border-radius: 4px;
     cursor: pointer;
     font-weight: 600;
+    font-family: inherit;
 
     &:hover {
       opacity: 0.85;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 2px;
     }
   }
 
@@ -837,8 +1107,8 @@ onMounted(async () => {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
+    width: 30px;
+    height: 30px;
     border: none;
     background: transparent;
     color: var(--text-tertiary);
@@ -853,6 +1123,12 @@ onMounted(async () => {
 
     &.active {
       color: var(--color-primary);
+      background: var(--bg-base);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 1px;
     }
   }
 
@@ -865,6 +1141,7 @@ onMounted(async () => {
     cursor: pointer;
     transition: all var(--transition-fast);
     white-space: nowrap;
+    min-height: 30px;
 
     &--install {
       background: var(--color-primary);
@@ -894,6 +1171,128 @@ onMounted(async () => {
         color: var(--color-error);
       }
     }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 2px;
+    }
+
+    &:disabled {
+      opacity: 0.58;
+      cursor: wait;
+    }
   }
+}
+
+.store-confirm {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.55);
+
+  &__dialog {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 12px;
+    width: min(420px, 100%);
+    padding: 20px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    background: var(--bg-surface);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.24);
+  }
+
+  &__icon {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    color: var(--color-error);
+    background: rgba(239, 68, 68, 0.1);
+  }
+
+  &__content {
+    h2 {
+      margin: 1px 0 6px;
+      color: var(--text-primary);
+      font-size: 15px;
+    }
+
+    p {
+      margin: 0;
+      color: var(--text-secondary);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+  }
+
+  &__actions {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  &__danger {
+    min-height: 32px;
+    padding: 5px 14px;
+    border: 1px solid var(--color-error);
+    border-radius: var(--radius-sm);
+    color: white;
+    background: var(--color-error);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+
+    &:hover { opacity: 0.9; }
+    &:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 760px) {
+  .store-view {
+    padding: 16px;
+
+    &__header { flex-direction: column; gap: 12px; }
+    &__toolbar { align-items: stretch; }
+    &__search { flex-basis: 100%; }
+    &__actions { width: 100%; }
+    &__actions :deep(.h-button) { flex: 1; min-height: 34px; }
+  }
+
+  .store-card {
+    &__header { align-items: flex-start; gap: 12px; }
+    &__repo-id { flex-basis: 100%; overflow-wrap: anywhere; }
+  }
+
+  .tool-item {
+    align-items: flex-start;
+    flex-wrap: wrap;
+
+    &__info { width: calc(100% - 48px); }
+    &__actions { width: 100%; justify-content: flex-end; }
+    &__desc { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .store-view *, .store-card *, .tool-item *, .store-confirm * { transition: none !important; }
 }
 </style>

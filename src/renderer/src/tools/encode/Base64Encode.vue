@@ -6,39 +6,23 @@
       :transform="encodeFn"
       :reverse-transform="decodeFn"
       :auto-fill-input-condition="isBase64Like"
+      forward-label="编码"
+      reverse-label="解码"
+      forward-input-title="原始文本"
+      forward-output-title="Base64"
+      reverse-input-title="Base64"
+      reverse-output-title="解码文本"
     />
   </h-single-layout>
 </template>
 
 <script setup lang="ts">
+import { encodeBase64, decodeBase64 } from '../../utils/encodingTransforms'
+
 const sample = 'Hello SuperTools! 你好世界！'
 
-function encodeFn(input: string): string {
-  try {
-    // 处理 Unicode 字符
-    const bytes = new TextEncoder().encode(input)
-    let binary = ''
-    bytes.forEach((b) => {
-      binary += String.fromCharCode(b)
-    })
-    return btoa(binary)
-  } catch {
-    return 'Error: 编码失败'
-  }
-}
-
-function decodeFn(input: string): string {
-  try {
-    const binary = atob(input.trim())
-    const bytes = new Uint8Array(binary.length)
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i)
-    }
-    return new TextDecoder().decode(bytes)
-  } catch {
-    return 'Error: 无效的 Base64'
-  }
-}
+const encodeFn = encodeBase64
+const decodeFn = decodeBase64
 
 function isBase64Like(str: string): boolean {
   const trimmed = str.trim()

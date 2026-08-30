@@ -35,7 +35,7 @@ export const cryptoToolManifests: Manifest[] = [
     keywords: ['hmac', 'mac', 'signature', '签名', '密钥'],
     description: '生成 HMAC 消息认证码',
     relatedToolId: ['sha-hash'],
-    componentFile: 'HashGenerator.vue'
+    componentFile: 'HmacGenerator.vue'
   },
   {
     id: 'aes-encryption',

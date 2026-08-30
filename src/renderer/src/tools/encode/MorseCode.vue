@@ -1,29 +1,24 @@
 <template>
   <h-single-layout>
     <div class="morse-code">
-      <div class="morse-code__options">
-        <h-radio
-          v-model="direction"
-          :options="[
-            { label: '文本 → 摩斯', value: 'toMorse' },
-            { label: '摩斯 → 文本', value: 'toText' }
-          ]"
-          size="small"
-        />
-      </div>
       <h-text-transform
         :sample-data="sample"
-        :transform="convertFn"
+        :enable-reverse="true"
+        :transform="toMorse"
+        :reverse-transform="toText"
         :auto-fill-input-condition="likeMorse"
+        forward-label="文本 → 摩斯"
+        reverse-label="摩斯 → 文本"
+        forward-input-title="文本"
+        forward-output-title="摩斯码"
+        reverse-input-title="摩斯码"
+        reverse-output-title="文本"
       />
     </div>
   </h-single-layout>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-
-const direction = ref<'toMorse' | 'toText'>('toMorse')
 const sample = 'HELLO WORLD'
 
 const MORSE_MAP: Record<string, string> = {
@@ -50,28 +45,23 @@ const REVERSE_MAP: Record<string, string> = Object.entries(MORSE_MAP).reduce(
 )
 
 function toMorse(input: string): string {
-  return input
-    .toUpperCase()
-    .split('')
-    .map((char) => MORSE_MAP[char] || '')
-    .filter(Boolean)
-    .join(' ')
+  return input.toUpperCase().split('').map((char) => {
+    const code = MORSE_MAP[char]
+    if (!code) throw new Error(`不支持的字符：${char}`)
+    return code
+  }).join(' ')
 }
 
 function toText(input: string): string {
   return input
     .trim()
     .split(/\s+/)
-    .map((code) => REVERSE_MAP[code] || '')
+    .map((code) => {
+      const char = REVERSE_MAP[code]
+      if (!char) throw new Error(`无效的摩斯码：${code}`)
+      return char
+    })
     .join('')
-}
-
-function convertFn(input: string): string {
-  try {
-    return direction.value === 'toMorse' ? toMorse(input) : toText(input)
-  } catch {
-    return 'Error: 转换失败'
-  }
 }
 
 function likeMorse(str: string): boolean {
@@ -85,10 +75,5 @@ function likeMorse(str: string): boolean {
   flex-direction: column;
   gap: 12px;
 
-  &__options {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
 }
 </style>

@@ -6,7 +6,7 @@
         <h-checkbox v-model="ignoreEmpty" label="忽略空行" />
         <h-checkbox v-model="caseSensitive" label="区分大小写" />
       </div>
-      <h-text-transform :sample-data="sample" :transform="dedupFn" />
+      <h-text-transform :sample-data="sample" :transform="dedupFn" :refresh-key="[trimWhitespace, ignoreEmpty, caseSensitive]" />
       <div class="text-dedup__stats">
         <span>原始: {{ stats.original }} 行</span>
         <span>去重后: {{ stats.deduped }} 行</span>
