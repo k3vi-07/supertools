@@ -10,7 +10,9 @@
 [![Vue 3](https://img.shields.io/badge/Vue-3-42b883?logo=vue.js&logoColor=white)](https://vuejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
+[![Release](https://img.shields.io/badge/Release-v1.5.1-success)](https://github.com/k3vi-07/supertools/releases/tag/v1.5.1)
 [![Tools](https://img.shields.io/badge/Built--in_Tools-136-7c3aed)](#-内置工具136-个)
+[![Remote Plugins](https://img.shields.io/badge/Remote_Plugins-134-0f766e)](https://github.com/k3vi-07/supertools-community)
 [![Website](https://img.shields.io/badge/Website-supertools.app-d4943e?style=flat)](https://k3vi-07.github.io/supertools/)
 
 基于 Electron + Vue 3 + TypeScript 构建的跨平台开发者工具箱桌面应用。
@@ -29,9 +31,13 @@
 | 🌙 **深色/浅色模式** | 手动切换，CSS 变量主题系统 |
 | 🧩 **插件化架构** | 工具自动注册（`import.meta.glob`），零配置新增工具 |
 | 🌐 **远程工具商店** | 从 GitHub 仓库动态加载远程工具（vue3-sfc-loader 运行时编译） |
+| 🔐 **真实加密实现** | Web Crypto API 与受信 JavaScript 库实现，含标准向量和篡改拒绝测试 |
+| 🔄 **自动更新** | GitHub Release 跨平台构建、版本检测、SHA-256 清单及 macOS bundle 签名校验 |
 | ⌨️ **全局快捷键** | `Option+Space` 呼出 · `⌘+K` 搜索 · `⌘+Shift+Space` 快速搜索 |
 
 ## 🚀 快速开始
+
+当前稳定版：**v1.5.1**。可前往 [GitHub Releases](https://github.com/k3vi-07/supertools/releases/latest) 下载 macOS、Windows 或 Linux 安装包。
 
 ### 环境要求
 
@@ -63,7 +69,7 @@ npm run build:linux
 
 ### macOS 安装须知
 
-由于没有 Apple 开发者签名，macOS 下载后可能提示「已损坏，无法打开」或「无法验证开发者」。解决方法：
+当前 macOS 包在生成 DMG/ZIP 前执行完整 App bundle ad-hoc 签名，并通过自动更新器要求的严格资源封装校验。由于没有 Apple Developer ID 公证，首次下载后仍可能提示「无法验证开发者」。解决方法：
 
 ```bash
 # 方法一：终端解除隔离属性（推荐）
@@ -72,7 +78,18 @@ xattr -cr /Applications/SuperTools.app
 # 方法二：系统偏好设置 → 安全性与隐私 → 允许打开
 ```
 
-> 这是未签名开源应用的常见问题，应用本身安全，代码完全开源可审查。
+> ad-hoc 签名用于保证安装包及自动更新过程中的 bundle 完整性，不等同于 Apple Developer ID 签名或公证。
+
+## 🆕 v1.5.1 更新
+
+- 修复 macOS ShipIt 自动更新签名校验失败。
+- 插件商店升级为主进程代理、缓存、注册表验证和隔离窗口加载链路。
+- 全面调整编码、解码及加密插件的双向切换、复制反馈、输入校验和移动端交互。
+- 将伪加密或简化实现替换为 Web Crypto API 或成熟 JavaScript 库实现。
+- 社区插件扩展到 **134 个**，新增 XChaCha20-Poly1305、AES-GCM-SIV 和 AES Key Wrap。
+- 发布流程增加完整校验、96 项测试、跨平台构建、单次 Release 汇总和 SHA-256 清单。
+
+完整记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## ⌨️ 快捷键
 
@@ -145,7 +162,7 @@ defineAsyncComponent + <Suspense> 渲染
 
 | 仓库 | 工具数 | 说明 |
 |------|--------|------|
-| [k3vi-07/supertools-community](https://github.com/k3vi-07/supertools-community) | 51 | 官方社区工具集 |
+| [k3vi-07/supertools-community](https://github.com/k3vi-07/supertools-community) | 134 | 官方社区工具集（v1.9.0） |
 
 ### 创建自己的远程工具仓库
 
@@ -214,7 +231,7 @@ mkdir tools
 
 #### 3. 编写工具组件（.vue 文件）
 
-工具是一个标准的 Vue 3 单文件组件。**注意：远程工具在浏览器端运行时编译，不能 `import` npm 包**，只能使用 Vue 内置 API 和全局注册的 `h-` 组件。
+工具是一个标准的 Vue 3 单文件组件。远程工具在运行时编译，可使用 Vue、内置 `h-` 组件以及主程序明确允许的受信模块；任意 npm 包不会被自动放行。
 
 ##### 模式一：输入→输出转换（使用 `<h-transform>`）
 
@@ -349,7 +366,8 @@ git push
 
 #### ⚠️ 注意事项
 
-- **不能 import npm 包**：远程工具通过 vue3-sfc-loader 在浏览器端编译，无法访问 node_modules。需要加密功能请使用浏览器原生 [Web Crypto API](https://developer.mozilla.org/docs/Web/API/Web_Crypto_API)
+- **模块白名单**：远程工具只能导入主程序注册的受信模块。通用加密优先使用浏览器 [Web Crypto API](https://developer.mozilla.org/docs/Web/API/Web_Crypto_API)；社区仓库现有插件还可使用 `crypto-js`、`hash-wasm`、`bcryptjs`、`@noble/ciphers` 等已映射模块
+- **安全边界**：远程源码由主进程获取并校验，工具窗口保持上下文隔离，不提供 Node.js 环境
 - **使用 `<script setup>`**：推荐使用 Composition API + `<script setup>` 语法
 - **纯前端运行**：工具运行在渲染进程，没有 Node.js 环境
 - **MDI 图标**：图标名从 [Material Design Icons](https://pictogrammers.com/library/mdi/) 查找，使用 `mdi:` 前缀
@@ -360,8 +378,14 @@ git push
 supertools/
 ├── src/
 │   ├── main/                    # Electron 主进程
-│   │   ├── index.ts             # 入口：窗口、快捷键、托盘、IPC、远程代理
-│   │   └── ...
+│   │   ├── index.ts             # 入口：窗口生命周期
+│   │   ├── ipcRegistry.ts       # IPC 统一注册
+│   │   ├── remoteService.ts     # 远程源码获取与安全校验
+│   │   ├── remoteRegistryService.ts # 注册表加载与验证
+│   │   ├── remoteToolWindow.ts  # 隔离远程工具窗口
+│   │   ├── cacheService.ts      # 缓存管理
+│   │   ├── shortcutManager.ts   # 全局快捷键
+│   │   └── updaterService.ts    # GitHub Release 自动更新
 │   ├── preload/                 # 预加载脚本
 │   │   ├── index.ts             # contextBridge: window.$he3 + window.supertools
 │   │   └── index.d.ts           # 类型声明
@@ -443,10 +467,13 @@ window.$he3.shellOpenExternal(url) // 打开浏览器
 | [Fuse.js](https://www.fusejs.io/) | 7 | 模糊搜索 |
 | [Iconify](https://iconify.design/) | 4 | 图标（Material Design Icons） |
 | [crypto-js](https://github.com/brix/crypto-js) | 4 | 加密哈希 |
+| [@noble/ciphers](https://github.com/paulmillr/noble-ciphers) | 2 | XChaCha20-Poly1305、AES-GCM-SIV、AES-KW |
+| [hash-wasm](https://github.com/Daninet/hash-wasm) | 4 | Argon2、scrypt、BLAKE2、Whirlpool |
 | [bcryptjs](https://github.com/dcodeIO/bcrypt.js) | 2 | 密码哈希 |
 | [qrcode](https://github.com/soldair/node-qrcode) | 1 | 二维码 |
 | [uuid](https://github.com/uuidjs/uuid) | 9 | UUID 生成 |
 | [vue3-sfc-loader](https://github.com/FranckFreiburger/vue3-sfc-loader) | 0 | 远程 SFC 运行时编译 |
+| [electron-updater](https://www.electron.build/auto-update.html) | 6 | GitHub Release 自动更新 |
 
 ## 📸 界面预览
 
