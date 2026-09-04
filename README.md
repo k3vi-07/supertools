@@ -10,7 +10,7 @@
 [![Vue 3](https://img.shields.io/badge/Vue-3-42b883?logo=vue.js&logoColor=white)](https://vuejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
-[![Release](https://img.shields.io/badge/Release-v1.5.1-success)](https://github.com/k3vi-07/supertools/releases/tag/v1.5.1)
+[![Release](https://img.shields.io/badge/Release-v1.5.2-success)](https://github.com/k3vi-07/supertools/releases/tag/v1.5.2)
 [![Tools](https://img.shields.io/badge/Built--in_Tools-136-7c3aed)](#-内置工具136-个)
 [![Remote Plugins](https://img.shields.io/badge/Remote_Plugins-134-0f766e)](https://github.com/k3vi-07/supertools-community)
 [![Website](https://img.shields.io/badge/Website-supertools.app-d4943e?style=flat)](https://k3vi-07.github.io/supertools/)
@@ -37,7 +37,7 @@
 
 ## 🚀 快速开始
 
-当前稳定版：**v1.5.1**。可前往 [GitHub Releases](https://github.com/k3vi-07/supertools/releases/latest) 下载 macOS、Windows 或 Linux 安装包。
+当前稳定版：**v1.5.2**。可前往 [GitHub Releases](https://github.com/k3vi-07/supertools/releases/latest) 下载 macOS、Windows 或 Linux 安装包。
 
 ### 环境要求
 
@@ -80,14 +80,14 @@ xattr -cr /Applications/SuperTools.app
 
 > ad-hoc 签名用于保证安装包及自动更新过程中的 bundle 完整性，不等同于 Apple Developer ID 签名或公证。
 
-## 🆕 v1.5.1 更新
+## 🆕 v1.5.2 更新
 
-- 修复 macOS ShipIt 自动更新签名校验失败。
-- 插件商店升级为主进程代理、缓存、注册表验证和隔离窗口加载链路。
-- 全面调整编码、解码及加密插件的双向切换、复制反馈、输入校验和移动端交互。
-- 将伪加密或简化实现替换为 Web Crypto API 或成熟 JavaScript 库实现。
-- 社区插件扩展到 **134 个**，新增 XChaCha20-Poly1305、AES-GCM-SIV 和 AES Key Wrap。
-- 发布流程增加完整校验、96 项测试、跨平台构建、单次 Release 汇总和 SHA-256 清单。
+- 修复 Windows 远程组件缓存键可越过缓存目录的路径安全问题，并新增回归测试。
+- 恢复 Electron Chromium 沙盒，缩减远程工具窗口的 preload 能力暴露面。
+- 远程 registry 优先使用不可变 commit SHA，安装和运行时不再静默切换版本。
+- 阻止不同仓库的同 ID 工具互相覆盖，并修复批量更新失败状态与导入边界。
+- 改进工具卡键盘操作、确认弹窗焦点管理、深浅主题文字对比度和最小窗口布局。
+- 发布验证扩展到 **98 项测试**、136 个内置工具及 134 个社区插件。
 
 完整记录见 [CHANGELOG.md](CHANGELOG.md)。
 

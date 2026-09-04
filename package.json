@@ -1,6 +1,6 @@
 {
   "name": "supertools",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "SuperTools - 开发者超级工具箱 | 136+ 内置工具 + 远程插件系统",
   "main": "./out/main/index.js",
   "author": "k3vi-07",
