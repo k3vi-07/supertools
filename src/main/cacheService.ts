@@ -1,6 +1,8 @@
 import { app } from 'electron'
 import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, readdirSync } from 'fs'
-import { join } from 'path'
+import { createHash } from 'crypto'
+import { join, resolve, sep } from 'path'
+import { validateRemoteUrl } from './remoteService'
 
 function cacheDir(): string {
   const dir = join(app.getPath('userData'), 'remote-tools')
@@ -8,9 +10,18 @@ function cacheDir(): string {
   return dir
 }
 
+export function cacheKeyToFileName(key: string): string {
+  const validation = validateRemoteUrl(key)
+  if (!validation.ok) throw new Error(validation.error)
+  return `${createHash('sha256').update(key).digest('hex')}.vue`
+}
+
 function cachePath(key: string): string {
-  const safeKey = key.replace(/^https?:\/\/[^/]+\/gh\//, '').replace(/[/:]/g, '_').replace(/@/g, '_at_')
-  return join(cacheDir(), safeKey)
+  const base = resolve(cacheDir())
+  const filename = cacheKeyToFileName(key)
+  const target = resolve(base, filename)
+  if (!target.startsWith(base + sep)) throw new Error('缓存路径越界')
+  return target
 }
 
 export function readRemoteCache(key: string): string | null {

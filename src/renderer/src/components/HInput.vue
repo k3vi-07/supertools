@@ -45,8 +45,9 @@ function handleInput(e: Event): void {
   transition: border-color var(--transition-fast);
   user-select: text;
 
-  &:focus {
+  &:focus-visible {
     border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 28%, transparent);
   }
 
   &::placeholder {

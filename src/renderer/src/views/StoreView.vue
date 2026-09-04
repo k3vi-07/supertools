@@ -194,7 +194,7 @@
             v-for="tool in filteredTools(repo.id)"
             :key="tool.id"
             class="tool-item"
-            :class="{ installed: remoteToolsStore.isInstalled(tool.id) }"
+            :class="{ installed: remoteToolsStore.isInstalled(tool.id, repo.id) }"
           >
             <div class="tool-item__icon">
               <h-icon :icon="tool.icon" :size="20" />
@@ -204,7 +204,7 @@
                 <span class="tool-item__name">{{ tool.nameZh }}</span>
                 <span v-if="tool.version" class="tool-item__version">v{{ tool.version }}</span>
                 <button
-                  v-if="remoteToolsStore.isOutdated(tool.id)"
+                  v-if="remoteToolsStore.isOutdated(tool.id, repo.id)"
                   class="tool-item__update-badge"
                   type="button"
                   :disabled="toolActions[tool.id] === 'update'"
@@ -230,21 +230,21 @@
               <div class="tool-item__rating">
                 <button
                   class="tool-item__rate-btn"
-                  :class="{ active: remoteToolsStore.getRating(tool.id) === 'like' }"
+                  :class="{ active: remoteToolsStore.getRating(tool.id, repo.id) === 'like' }"
                   type="button"
                   :aria-label="t('store.likeTool', { name: tool.nameZh })"
-                  :aria-pressed="remoteToolsStore.getRating(tool.id) === 'like'"
-                  @click.stop="remoteToolsStore.setRating(tool.id, 'like')"
+                  :aria-pressed="remoteToolsStore.getRating(tool.id, repo.id) === 'like'"
+                  @click.stop="remoteToolsStore.setRating(tool.id, 'like', repo.id)"
                 >
                   <h-icon icon="mdi:thumb-up-outline" :size="14" />
                 </button>
                 <button
                   class="tool-item__rate-btn"
-                  :class="{ active: remoteToolsStore.getRating(tool.id) === 'dislike' }"
+                  :class="{ active: remoteToolsStore.getRating(tool.id, repo.id) === 'dislike' }"
                   type="button"
                   :aria-label="t('store.dislikeTool', { name: tool.nameZh })"
-                  :aria-pressed="remoteToolsStore.getRating(tool.id) === 'dislike'"
-                  @click.stop="remoteToolsStore.setRating(tool.id, 'dislike')"
+                  :aria-pressed="remoteToolsStore.getRating(tool.id, repo.id) === 'dislike'"
+                  @click.stop="remoteToolsStore.setRating(tool.id, 'dislike', repo.id)"
                 >
                   <h-icon icon="mdi:thumb-down-outline" :size="14" />
                 </button>
@@ -252,7 +252,7 @@
 
               <!-- 安装/卸载按钮 -->
               <button
-                v-if="!remoteToolsStore.isInstalled(tool.id)"
+                v-if="!remoteToolsStore.isInstalled(tool.id, repo.id)"
                 class="tool-item__btn tool-item__btn--install"
                 type="button"
                 :disabled="toolActions[tool.id] === 'install'"
@@ -261,7 +261,7 @@
                 {{ toolActions[tool.id] === 'install' ? t('store.installing') : t('store.install') }}
               </button>
               <button
-                v-else-if="remoteToolsStore.isOutdated(tool.id)"
+                v-else-if="remoteToolsStore.isOutdated(tool.id, repo.id)"
                 class="tool-item__btn tool-item__btn--update"
                 type="button"
                 :disabled="toolActions[tool.id] === 'update'"
@@ -273,7 +273,7 @@
                 v-else
                 class="tool-item__btn tool-item__btn--uninstall"
                 type="button"
-                @click="requestUninstallTool(tool)"
+                @click="requestUninstallTool(tool, repo.id)"
               >
                 {{ t('store.uninstall') }}
               </button>
@@ -285,12 +285,13 @@
 
     <div v-if="confirmation" class="store-confirm" role="presentation" @click.self="closeConfirmation">
       <section
+        ref="confirmationDialogRef"
         class="store-confirm__dialog"
         role="alertdialog"
         aria-modal="true"
         :aria-labelledby="'store-confirm-title'"
         :aria-describedby="'store-confirm-description'"
-        @keydown.esc="closeConfirmation"
+        @keydown="handleConfirmationKeydown"
       >
         <div class="store-confirm__icon"><h-icon icon="mdi:alert-outline" :size="22" /></div>
         <div class="store-confirm__content">
@@ -328,6 +329,7 @@ const repoTools = reactive<Record<string, RemoteToolEntry[]>>({})
 const loadingRepos = reactive<Record<string, boolean>>({})
 const loadErrors = reactive<Record<string, boolean>>({})
 const importInputRef = ref<HTMLInputElement>()
+const confirmationDialogRef = ref<HTMLElement>()
 const addingRepo = ref(false)
 const updatingAll = ref(false)
 const toolActions = reactive<Record<string, 'install' | 'update' | undefined>>({})
@@ -338,6 +340,11 @@ const confirmation = ref<{
   confirmLabel: string
   action: () => void | Promise<void>
 } | null>(null)
+let confirmationTrigger: HTMLElement | null = null
+
+const installedToolMap = computed(() => new Map(
+  remoteToolsStore.installedTools.map((tool) => [`${tool.sourceRepo}:${tool.id}`, tool])
+))
 
 /** 获取分类名称 */
 function getCategoryName(categoryId: string): string {
@@ -391,14 +398,14 @@ function filteredTools(repoId: string): RemoteToolEntry[] {
     sorted.sort((a, b) => a.nameZh.localeCompare(b.nameZh))
   } else if (sortBy.value === 'installed') {
     sorted.sort((a, b) => {
-      const ai = remoteToolsStore.isInstalled(a.id) ? 0 : 1
-      const bi = remoteToolsStore.isInstalled(b.id) ? 0 : 1
+      const ai = remoteToolsStore.isInstalled(a.id, repoId) ? 0 : 1
+      const bi = remoteToolsStore.isInstalled(b.id, repoId) ? 0 : 1
       return ai - bi
     })
   } else if (sortBy.value === 'recent') {
     sorted.sort((a, b) => {
-      const aTool = remoteToolsStore.installedTools.find((i) => i.id === a.id)
-      const bTool = remoteToolsStore.installedTools.find((i) => i.id === b.id)
+      const aTool = installedToolMap.value.get(`${repoId}:${a.id}`)
+      const bTool = installedToolMap.value.get(`${repoId}:${b.id}`)
       return (bTool?.installedAt || 0) - (aTool?.installedAt || 0)
     })
   }
@@ -409,13 +416,13 @@ function filteredTools(repoId: string): RemoteToolEntry[] {
 /** 判断仓库工具是否全部已安装 */
 function allToolsInstalled(repoId: string): boolean {
   const tools = repoTools[repoId] || []
-  return tools.length > 0 && tools.every((tool) => remoteToolsStore.isInstalled(tool.id))
+  return tools.length > 0 && tools.every((tool) => remoteToolsStore.isInstalled(tool.id, repoId))
 }
 
 /** 判断仓库是否有工具已安装 */
 function anyToolInstalled(repoId: string): boolean {
   const tools = repoTools[repoId] || []
-  return tools.some((tool) => remoteToolsStore.isInstalled(tool.id))
+  return tools.some((tool) => remoteToolsStore.isInstalled(tool.id, repoId))
 }
 
 /** 添加仓库 */
@@ -481,19 +488,48 @@ function removeRepo(repoId: string): void {
 }
 
 function openConfirmation(options: NonNullable<typeof confirmation.value>): void {
+  confirmationTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null
   confirmation.value = options
   void nextTick(() => {
-    document.querySelector<HTMLButtonElement>('.store-confirm__dialog button')?.focus()
+    confirmationDialogRef.value?.querySelector<HTMLButtonElement>('button')?.focus()
   })
 }
 
 function closeConfirmation(): void {
   confirmation.value = null
+  const trigger = confirmationTrigger
+  confirmationTrigger = null
+  void nextTick(() => {
+    if (trigger?.isConnected) trigger.focus()
+  })
+}
+
+function handleConfirmationKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeConfirmation()
+    return
+  }
+  if (event.key !== 'Tab') return
+
+  const focusable = confirmationDialogRef.value?.querySelectorAll<HTMLElement>(
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  )
+  if (!focusable?.length) return
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first.focus()
+  }
 }
 
 async function confirmAction(): Promise<void> {
   const action = confirmation.value?.action
-  confirmation.value = null
+  closeConfirmation()
   await action?.()
 }
 
@@ -514,6 +550,13 @@ function requestRemoveRepo(repoId: string): void {
 /** 安装工具 */
 async function installTool(tool: RemoteToolEntry, repoId: string): Promise<void> {
   if (toolActions[tool.id]) return
+  const conflict = remoteToolsStore.installedTools.find(
+    (installed) => installed.id === tool.id && installed.sourceRepo !== repoId
+  )
+  if (conflict) {
+    window.$he3?.message.error(t('store.toolIdConflict', { repo: conflict.sourceRepo }))
+    return
+  }
   toolActions[tool.id] = 'install'
   try {
     const success = await remoteToolsStore.installTool(tool, repoId)
@@ -525,18 +568,18 @@ async function installTool(tool: RemoteToolEntry, repoId: string): Promise<void>
 }
 
 /** 卸载工具 */
-function uninstallTool(tool: RemoteToolEntry): void {
-  remoteToolsStore.uninstallTool(tool.id)
+function uninstallTool(tool: RemoteToolEntry, repoId: string): void {
+  remoteToolsStore.uninstallTool(tool.id, repoId)
   refreshToolList()
   window.$he3?.message.info(t('store.uninstallSuccess', { name: tool.nameZh }))
 }
 
-function requestUninstallTool(tool: RemoteToolEntry): void {
+function requestUninstallTool(tool: RemoteToolEntry, repoId: string): void {
   openConfirmation({
     title: t('store.uninstallToolTitle'),
     description: t('store.uninstallToolDescription', { name: tool.nameZh }),
     confirmLabel: t('store.uninstall'),
-    action: () => uninstallTool(tool)
+    action: () => uninstallTool(tool, repoId)
   })
 }
 
@@ -582,7 +625,11 @@ function requestUninstallAll(repoId: string): void {
 /** 检查更新 */
 async function handleCheckUpdates(): Promise<void> {
   const outdated = await remoteToolsStore.checkUpdates()
-  if (outdated.length === 0) {
+  if (remoteToolsStore.updateCheckErrors.length > 0) {
+    window.$he3?.message.warning(t('store.updateCheckPartialFailed', {
+      count: remoteToolsStore.updateCheckErrors.length
+    }))
+  } else if (outdated.length === 0) {
     window.$he3?.message.success(t('store.noUpdates'))
   } else {
     window.$he3?.message.info(t('store.updatesFound', { count: outdated.length }))
@@ -759,6 +806,11 @@ onMounted(async () => {
     &::placeholder {
       color: var(--text-tertiary);
     }
+  }
+
+  &__search:focus-within {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 28%, transparent);
   }
 
   &__clear-search {
@@ -1266,7 +1318,8 @@ onMounted(async () => {
   border: 0;
 }
 
-@media (max-width: 760px) {
+// 主窗口最小宽度为 900px，扣除侧栏后内容区约 685px；断点需在此之前生效。
+@media (max-width: 1000px) {
   .store-view {
     padding: 16px;
 
@@ -1274,12 +1327,14 @@ onMounted(async () => {
     &__toolbar { align-items: stretch; }
     &__search { flex-basis: 100%; }
     &__actions { width: 100%; }
-    &__actions :deep(.h-button) { flex: 1; min-height: 34px; }
+    &__actions :deep(.h-button) { flex: 1; min-height: 44px; }
+    &__clear-search { width: 44px; height: 44px; }
   }
 
   .store-card {
     &__header { align-items: flex-start; gap: 12px; }
     &__repo-id { flex-basis: 100%; overflow-wrap: anywhere; }
+    &__btn { width: 44px; height: 44px; }
   }
 
   .tool-item {
@@ -1288,6 +1343,8 @@ onMounted(async () => {
 
     &__info { width: calc(100% - 48px); }
     &__actions { width: 100%; justify-content: flex-end; }
+    &__rate-btn { width: 44px; height: 44px; }
+    &__btn { min-height: 44px; }
     &__desc { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   }
 }

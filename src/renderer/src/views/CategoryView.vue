@@ -23,7 +23,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useToolsStore } from '../stores/tools'
 import { useHistoryStore } from '../stores/history'
@@ -50,12 +50,6 @@ function openTool(id: string): void {
   router.push(`/tool/${id}`)
 }
 
-watch(
-  () => route.params.category,
-  () => {
-    // 分类变化时无需额外操作
-  }
-)
 </script>
 
 <style scoped lang="less">

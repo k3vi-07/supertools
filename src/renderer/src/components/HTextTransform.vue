@@ -349,6 +349,10 @@ defineExpose({
     background: var(--bg-surface);
     color: var(--text-primary);
 
+    &:focus-visible {
+      box-shadow: inset 0 0 0 2px var(--color-primary);
+    }
+
     &::placeholder {
       color: var(--text-tertiary);
     }

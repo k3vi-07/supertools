@@ -50,6 +50,8 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
   const outdatedTools = ref<OutdatedTool[]>([])
   /** 是否正在检查更新 */
   const checkingUpdates = ref(false)
+  /** 最近一次更新检查失败的仓库 */
+  const updateCheckErrors = ref<string[]>([])
 
   /** 默认社区仓库（首次使用自动添加） */
   const DEFAULT_REPO = 'k3vi-07/supertools-community'
@@ -170,8 +172,17 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
 
   /** 安装远程工具（同时预下载组件到本地缓存） */
   async function installTool(entry: RemoteToolEntry, repoId: string): Promise<boolean> {
-    const version = entry.version || 'master'
-    if (!await precacheRemoteComponent(repoId, entry.path, version)) return false
+    const conflictingTool = installedTools.value.find(
+      (tool) => tool.id === entry.id && tool.sourceRepo !== repoId
+    )
+    if (conflictingTool) {
+      console.warn(
+        `[remoteTools] 工具 ID "${entry.id}" 已由仓库 ${conflictingTool.sourceRepo} 安装，拒绝由 ${repoId} 覆盖`
+      )
+      return false
+    }
+    const cachedVersion = await precacheRemoteComponent(repoId, entry.path, entry.version)
+    if (!cachedVersion) return false
     if (installedIds.value.has(entry.id)) {
       // 更新已有安装
       installedTools.value = installedTools.value.filter((t) => t.id !== entry.id)
@@ -179,7 +190,7 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
     installedTools.value.push({
       ...entry,
       sourceRepo: repoId,
-      installedVersion: version,
+      installedVersion: cachedVersion,
       installedAt: Date.now()
     })
     // 清除该工具的过期状态
@@ -190,9 +201,11 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
   }
 
   /** 卸载远程工具（同时清理本地缓存） */
-  function uninstallTool(toolId: string): void {
-    const tool = installedTools.value.find((t) => t.id === toolId)
-    installedTools.value = installedTools.value.filter((t) => t.id !== toolId)
+  function uninstallTool(toolId: string, repoId?: string): void {
+    const tool = installedTools.value.find((t) => t.id === toolId && (!repoId || t.sourceRepo === repoId))
+    installedTools.value = installedTools.value.filter(
+      (t) => !(t.id === toolId && (!repoId || t.sourceRepo === repoId))
+    )
     outdatedTools.value = outdatedTools.value.filter((t) => t.toolId !== toolId)
     save()
 
@@ -203,8 +216,10 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
   }
 
   /** 判断是否已安装 */
-  function isInstalled(toolId: string): boolean {
-    return installedIds.value.has(toolId)
+  function isInstalled(toolId: string, repoId?: string): boolean {
+    return repoId
+      ? installedTools.value.some((tool) => tool.id === toolId && tool.sourceRepo === repoId)
+      : installedIds.value.has(toolId)
   }
 
   /** 获取已安装工具的版本 */
@@ -236,6 +251,7 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
   /** 检查所有已安装工具的更新 */
   async function checkUpdates(): Promise<OutdatedTool[]> {
     checkingUpdates.value = true
+    updateCheckErrors.value = []
     const outdated: OutdatedTool[] = []
     try {
       // 按仓库分组检查
@@ -259,7 +275,7 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
             }
           }
         } catch {
-          // 仓库获取失败，跳过
+          updateCheckErrors.value.push(repoId)
         }
         return found
       }))
@@ -297,35 +313,50 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
   /** 更新所有过期工具 */
   async function updateAll(): Promise<number> {
     let count = 0
+    const failedIds = new Set<string>()
     for (const outdated of [...outdatedTools.value]) {
       const installed = installedTools.value.find((t) => t.id === outdated.toolId)
       if (installed) {
-        if (await installTool(outdated.entry, installed.sourceRepo)) count++
+        if (await installTool(outdated.entry, installed.sourceRepo)) {
+          count++
+        } else {
+          failedIds.add(outdated.toolId)
+        }
+      } else {
+        failedIds.add(outdated.toolId)
       }
     }
-    outdatedTools.value = []
+    outdatedTools.value = outdatedTools.value.filter((item) => failedIds.has(item.toolId))
     return count
   }
 
   /** 判断工具是否有更新 */
-  function isOutdated(toolId: string): boolean {
-    return outdatedTools.value.some((t) => t.toolId === toolId)
+  function isOutdated(toolId: string, repoId?: string): boolean {
+    return outdatedTools.value.some((item) => {
+      if (item.toolId !== toolId) return false
+      if (!repoId) return true
+      return installedTools.value.some(
+        (tool) => tool.id === toolId && tool.sourceRepo === repoId
+      )
+    })
   }
 
   /** 设置评分 */
-  function setRating(toolId: string, rating: Rating): void {
+  function setRating(toolId: string, rating: Rating, repoId?: string): void {
+    const key = repoId ? `${repoId}:${toolId}` : toolId
     // 切换：再次点击相同评分则取消
-    if (ratings.value[toolId] === rating) {
-      delete ratings.value[toolId]
+    if (ratings.value[key] === rating) {
+      delete ratings.value[key]
     } else {
-      ratings.value[toolId] = rating
+      ratings.value[key] = rating
     }
+    if (repoId) delete ratings.value[toolId]
     save()
   }
 
   /** 获取评分 */
-  function getRating(toolId: string): Rating | undefined {
-    return ratings.value[toolId]
+  function getRating(toolId: string, repoId?: string): Rating | undefined {
+    return repoId ? ratings.value[`${repoId}:${toolId}`] ?? ratings.value[toolId] : ratings.value[toolId]
   }
 
   /** 导出已安装工具列表 */
@@ -353,6 +384,10 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
       }
       for (const item of data.tools) {
         try {
+          if (!repos.value.some((repo) => repo.id === item.sourceRepo)) {
+            failed++
+            continue
+          }
           const registry = await fetchRegistry(item.sourceRepo)
           const entry = registry.tools.find((t) => t.id === item.id)
           if (entry) {
@@ -394,6 +429,7 @@ export const useRemoteToolsStore = defineStore('remoteTools', () => {
     ratings,
     outdatedTools,
     checkingUpdates,
+    updateCheckErrors,
     installedCount,
     recentlyInstalled,
     topRatedTools,

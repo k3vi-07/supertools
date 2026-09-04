@@ -59,16 +59,16 @@ const moduleCache: Record<string, unknown> = {
   'hash-wasm': HashWasm,
   'twofish-ts': Twofish,
   '@li0ard/gost341194': Gost341194,
-  'fb-tiger-hash': TigerHash
-  , 'crypto-api/snefru': { default: Snefru }
-  , 'crypto-api/utf': CryptoApiUtf
-  , 'crypto-api/hex': CryptoApiHex
-  , '@stablelib/salsa20': Salsa20
-  , '@stablelib/chacha': ChaCha20
-  , '@noble/ciphers/chacha.js': NobleChaCha
-  , '@noble/ciphers/aes.js': NobleAes
-  , '@noble/ciphers/utils.js': NobleCipherUtils
-  , 'ch-city-wasm': { cityhash64_hex, cityhash_102_128_hex }
+  'fb-tiger-hash': TigerHash,
+  'crypto-api/snefru': { default: Snefru },
+  'crypto-api/utf': CryptoApiUtf,
+  'crypto-api/hex': CryptoApiHex,
+  '@stablelib/salsa20': Salsa20,
+  '@stablelib/chacha': ChaCha20,
+  '@noble/ciphers/chacha.js': NobleChaCha,
+  '@noble/ciphers/aes.js': NobleAes,
+  '@noble/ciphers/utils.js': NobleCipherUtils,
+  'ch-city-wasm': { cityhash64_hex, cityhash_102_128_hex }
 }
 
 /** 内存缓存：避免同一 session 内重复读磁盘 */
@@ -180,23 +180,23 @@ async function checkUrlAccessible(url: string): Promise<boolean> {
 export async function precacheRemoteComponent(
   repo: string,
   path: string,
-  version = 'master'
-): Promise<boolean> {
-  const versions = [version, 'master', 'main'].filter((v, i, a) => a.indexOf(v) === i)
+  version?: string
+): Promise<string | null> {
+  const versions = version ? [version] : ['master', 'main']
   for (const ver of versions) {
     const url = buildCdnUrl(repo, path, ver)
     try {
       const content = await getFileWithCache(url)
       if (content) {
         console.log(`[remoteLoader] 预缓存成功: ${ver}`)
-        return true
+        return ver
       }
     } catch {
       // 尝试下一个版本
     }
   }
   console.warn('[remoteLoader] 预缓存失败：所有版本均不可用')
-  return false
+  return null
 }
 
 /**
@@ -233,9 +233,8 @@ export async function loadRemoteComponent(
   path: string,
   version = 'master'
 ): Promise<Component> {
-  // 尝试顺序：指定版本 → latest → master → main
-  // latest 是版本标签，CDN 缓存始终正确；master 可能有过期缓存
-  const versions = [version, 'latest', 'master', 'main'].filter((v, i, a) => a.indexOf(v) === i)
+  // 安装阶段已经解析并缓存了实际版本，运行时不得静默切换到其他分支。
+  const versions = [version]
   let lastError: unknown = null
 
   for (const ver of versions) {

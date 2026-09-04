@@ -1,5 +1,6 @@
 <template>
   <button
+    type="button"
     class="h-button"
     :class="[`h-button--${type}`, `h-button--${size}`]"
     :disabled="disabled"
@@ -97,6 +98,11 @@ const iconSize = 14
 
   &:hover:not(:disabled) {
     border-color: var(--color-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
   }
 
   &:disabled {

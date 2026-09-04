@@ -388,10 +388,6 @@ function setupIpcHandlers(): void {
 
 /** 应用初始化 */
 app.whenReady().then((): void => {
-  // 禁用 GPU 沙盒以避免某些环境下 GPU 进程崩溃
-  app.commandLine.appendSwitch('disable-gpu-sandbox')
-  app.commandLine.appendSwitch('no-sandbox')
-
   createMainWindow()
   createSearchWindow()
   createTray()

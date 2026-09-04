@@ -143,34 +143,20 @@ contextBridge.exposeInMainWorld('$he3', {
 
 // 暴露导航相关 API（用于搜索浮层）
 contextBridge.exposeInMainWorld('supertools', {
-  navigateToTool: (toolId: string): void => {
-    if (isIsolatedRemoteWindow) return
+  ...(!isIsolatedRemoteWindow ? {
+    navigateToTool: (toolId: string): void => {
     ipcRenderer.send(IPC_CHANNELS.NAVIGATE_TO_TOOL, toolId)
-  },
-  hideSearch: (): void => {
-    if (isIsolatedRemoteWindow) return
-    ipcRenderer.send(IPC_CHANNELS.HIDE_SEARCH_OVERLAY)
-  },
-  showMain: (): void => {
-    if (isIsolatedRemoteWindow) return
-    ipcRenderer.send(IPC_CHANNELS.SHOW_MAIN_WINDOW)
-  },
-  onHide: (cb: () => void): void => {
-    ipcRenderer.on('search:hide', cb)
-  },
-  onShow: (cb: () => void): void => {
-    ipcRenderer.on('search:show', cb)
-  },
-  onFocus: (cb: () => void): void => {
-    ipcRenderer.on('search:focus', cb)
-  },
-  onNavigate: (cb: (toolId: string) => void): void => {
-    ipcRenderer.on('navigate:tool', (_e, toolId: string) => cb(toolId))
-  },
-  openRemoteTool: (toolId: string): void => {
-    if (isIsolatedRemoteWindow) return
-    ipcRenderer.send(IPC_CHANNELS.OPEN_REMOTE_TOOL, toolId)
-  },
+    },
+    hideSearch: (): void => ipcRenderer.send(IPC_CHANNELS.HIDE_SEARCH_OVERLAY),
+    showMain: (): void => ipcRenderer.send(IPC_CHANNELS.SHOW_MAIN_WINDOW),
+    onHide: (cb: () => void): void => { ipcRenderer.on('search:hide', cb) },
+    onShow: (cb: () => void): void => { ipcRenderer.on('search:show', cb) },
+    onFocus: (cb: () => void): void => { ipcRenderer.on('search:focus', cb) },
+    onNavigate: (cb: (toolId: string) => void): void => {
+      ipcRenderer.on('navigate:tool', (_e, toolId: string) => cb(toolId))
+    },
+    openRemoteTool: (toolId: string): void => ipcRenderer.send(IPC_CHANNELS.OPEN_REMOTE_TOOL, toolId)
+  } : {}),
 
   // ===== 远程工具加载 API =====
 
@@ -185,14 +171,14 @@ contextBridge.exposeInMainWorld('supertools', {
   },
 
   /** 获取远程仓库的工具清单 */
-  fetchRegistry: async (repo: string): Promise<unknown> => {
-    const result = await ipcRenderer.invoke(IPC_CHANNELS.REMOTE_FETCH_REGISTRY, repo)
-    const res = result as { ok: boolean; data?: unknown; error?: string }
-    if (!res.ok) {
-      throw new Error(res.error || '获取清单失败')
+  ...(!isIsolatedRemoteWindow ? {
+    fetchRegistry: async (repo: string): Promise<unknown> => {
+      const result = await ipcRenderer.invoke(IPC_CHANNELS.REMOTE_FETCH_REGISTRY, repo)
+      const res = result as { ok: boolean; data?: unknown; error?: string }
+      if (!res.ok) throw new Error(res.error || '获取清单失败')
+      return res.data
     }
-    return res.data
-  },
+  } : {}),
 
   // ===== 远程组件本地缓存 API =====
 
@@ -216,52 +202,29 @@ contextBridge.exposeInMainWorld('supertools', {
   },
 
   /** 清空所有组件缓存 */
-  clearCache: async (): Promise<boolean> => {
-    if (isIsolatedRemoteWindow) return false
-    const result = await ipcRenderer.invoke(IPC_CHANNELS.REMOTE_CACHE_CLEAR)
-    return (result as { ok: boolean }).ok
-  },
+  ...(!isIsolatedRemoteWindow ? {
+    clearCache: async (): Promise<boolean> => {
+      const result = await ipcRenderer.invoke(IPC_CHANNELS.REMOTE_CACHE_CLEAR)
+      return (result as { ok: boolean }).ok
+    }
+  } : {}),
 
   camelliaBlock: (mode: 'encrypt' | 'decrypt', keyHex: string, dataHex: string): Promise<string> =>
     ipcRenderer.invoke(IPC_CHANNELS.CRYPTO_CAMELLIA_BLOCK, mode, keyHex, dataHex),
 
-  // ===== 自动更新 API =====
-
-  /** 手动检查更新 */
-  checkForUpdates: async (): Promise<void> => {
-    if (isIsolatedRemoteWindow) return
-    await ipcRenderer.invoke(IPC_CHANNELS.UPDATER_CHECK)
-  },
-
-  /** 安装已下载的更新并重启 */
-  installUpdate: (): void => {
-    if (isIsolatedRemoteWindow) return
-    ipcRenderer.send(IPC_CHANNELS.UPDATER_INSTALL)
-  },
-
-  /** 获取当前版本信息 */
-  getUpdateStatus: async (): Promise<{ currentVersion: string }> => {
-    if (isIsolatedRemoteWindow) return { currentVersion: '' }
-    return ipcRenderer.invoke(IPC_CHANNELS.UPDATER_GET_STATUS)
-  },
-
-  /** 监听主进程推送的更新事件 */
-  onUpdateEvent: (cb: (event: { type: string; info?: Record<string, unknown> }) => void): void => {
-    if (isIsolatedRemoteWindow) return
-    ipcRenderer.on(IPC_CHANNELS.UPDATER_EVENT, (_e, event) => cb(event))
-  },
-
-  // ===== 快捷键配置 API =====
-
-  /** 获取当前快捷键配置 */
-  getShortcuts: async (): Promise<{ main: string; search: string; appSearch: string }> => {
-    if (isIsolatedRemoteWindow) return { main: '', search: '', appSearch: '' }
-    return ipcRenderer.invoke(IPC_CHANNELS.SHORTCUT_GET)
-  },
-
-  /** 更新快捷键配置 */
-  updateShortcuts: async (shortcuts: Record<string, string>): Promise<{ ok: boolean; error?: string }> => {
-    if (isIsolatedRemoteWindow) return { ok: false, error: '远程工具窗口不支持快捷键配置' }
-    return ipcRenderer.invoke(IPC_CHANNELS.SHORTCUT_UPDATE, shortcuts)
-  }
+  ...(!isIsolatedRemoteWindow ? {
+    checkForUpdates: async (): Promise<void> => {
+      await ipcRenderer.invoke(IPC_CHANNELS.UPDATER_CHECK)
+    },
+    installUpdate: (): void => ipcRenderer.send(IPC_CHANNELS.UPDATER_INSTALL),
+    getUpdateStatus: (): Promise<{ currentVersion: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.UPDATER_GET_STATUS),
+    onUpdateEvent: (cb: (event: { type: string; info?: Record<string, unknown> }) => void): void => {
+      ipcRenderer.on(IPC_CHANNELS.UPDATER_EVENT, (_e, event) => cb(event))
+    },
+    getShortcuts: (): Promise<{ main: string; search: string; appSearch: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.SHORTCUT_GET),
+    updateShortcuts: (shortcuts: Record<string, string>): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.SHORTCUT_UPDATE, shortcuts)
+  } : {})
 })

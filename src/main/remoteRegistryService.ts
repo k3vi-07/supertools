@@ -16,22 +16,29 @@ export async function fetchRemoteRegistry(repo: string): Promise<{ ok: boolean; 
     } catch { /* fallback refs */ }
   }
 
-  const sources: string[] = []
-  if (sha) sources.push('https://cdn.jsdelivr.net/gh/' + owner + '@' + sha + '/registry.json', 'https://raw.githubusercontent.com/' + owner + '/' + sha + '/registry.json')
+  const sourceGroups: string[][] = []
+  if (sha) sourceGroups.push([
+    'https://cdn.jsdelivr.net/gh/' + owner + '@' + sha + '/registry.json',
+    'https://raw.githubusercontent.com/' + owner + '/' + sha + '/registry.json'
+  ])
   for (const ref of version ? [version] : ['latest', 'master', 'main']) {
-    sources.push('https://cdn.jsdelivr.net/gh/' + owner + '@' + ref + '/registry.json', 'https://raw.githubusercontent.com/' + owner + '/' + ref + '/registry.json')
+    sourceGroups.push([
+      'https://cdn.jsdelivr.net/gh/' + owner + '@' + ref + '/registry.json',
+      'https://raw.githubusercontent.com/' + owner + '/' + ref + '/registry.json'
+    ])
   }
 
-  let best: { data: unknown; count: number } | null = null
   let lastError = '未知错误'
-  const results = await Promise.all([...new Set(sources)].map((url) => fetchRemoteText(url, REMOTE_LIMITS.registryBytes)))
-  for (const result of results) {
-    if (!result.ok || !result.data) { lastError = result.error || lastError; continue }
-    try {
-      const data = JSON.parse(result.data) as { tools?: unknown[] }
-      const count = Array.isArray(data.tools) ? data.tools.length : 0
-      if (!best || count > best.count) best = { data, count }
-    } catch { lastError = 'registry.json 不是有效 JSON' }
+  for (const sources of sourceGroups) {
+    const results = await Promise.all([...new Set(sources)].map((url) => fetchRemoteText(url, REMOTE_LIMITS.registryBytes)))
+    for (const result of results) {
+      if (!result.ok || !result.data) { lastError = result.error || lastError; continue }
+      try {
+        const data = JSON.parse(result.data) as { tools?: unknown[] }
+        if (Array.isArray(data.tools)) return { ok: true, data }
+        lastError = 'registry.json 缺少 tools 数组'
+      } catch { lastError = 'registry.json 不是有效 JSON' }
+    }
   }
-  return best ? { ok: true, data: best.data } : { ok: false, error: '无法获取仓库清单 (' + lastError + ')' }
+  return { ok: false, error: '无法获取仓库清单 (' + lastError + ')' }
 }

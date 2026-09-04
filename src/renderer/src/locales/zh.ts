@@ -112,6 +112,8 @@ export const zhMessages = {
     addFailed: '添加失败，请检查仓库地址或网络',
     installFailed: '安装失败，请检查网络后重试',
     updateFailed: '更新失败，请检查网络后重试',
+    updateCheckPartialFailed: '{count} 个仓库检查失败，未将其视为“全部最新”',
+    toolIdConflict: '该工具 ID 已由仓库 {repo} 安装，不能覆盖',
     repoRemoved: '已移除仓库',
     updatesFound: '发现 {count} 个可更新工具',
     refreshRepo: '刷新仓库 {name}',

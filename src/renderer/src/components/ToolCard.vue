@@ -1,5 +1,5 @@
 <template>
-  <div class="tool-card" @click="$emit('click')">
+  <button type="button" class="tool-card" @click="$emit('click')">
     <div class="tool-card__icon">
       <h-icon :icon="tool.icon" :size="22" />
     </div>
@@ -10,7 +10,7 @@
     <div v-if="isFavorite" class="tool-card__star">
       <h-icon icon="mdi:star" :size="14" color="#f59e0b" />
     </div>
-  </div>
+  </button>
 </template>
 
 <script setup lang="ts">
@@ -35,6 +35,10 @@ defineEmits<{
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   background: var(--bg-surface);
+  width: 100%;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
   transition: all var(--transition-fast);
 
@@ -42,6 +46,11 @@ defineEmits<{
     border-color: var(--color-primary);
     transform: translateY(-2px);
     box-shadow: var(--shadow-md);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
   }
 
   &__icon {

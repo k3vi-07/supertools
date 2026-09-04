@@ -112,6 +112,8 @@ export const enMessages = {
     addFailed: 'Failed to add repository',
     installFailed: 'Installation failed. Check your connection and retry',
     updateFailed: 'Update failed. Check your connection and retry',
+    updateCheckPartialFailed: 'Update checks failed for {count} repositories; they were not treated as up to date',
+    toolIdConflict: 'This tool ID is already installed from {repo} and cannot be overwritten',
     repoRemoved: 'Repository removed',
     updatesFound: '{count} updates available',
     refreshRepo: 'Refresh repository {name}',
