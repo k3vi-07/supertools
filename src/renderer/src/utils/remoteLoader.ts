@@ -12,6 +12,9 @@
 import { loadModule } from 'vue3-sfc-loader'
 import * as Vue from 'vue'
 import bcryptjs from 'bcryptjs'
+import DOMPurify from 'dompurify'
+import * as Marked from 'marked'
+import JsBarcode from 'jsbarcode'
 import CryptoJS from 'crypto-js'
 import * as HashWasm from 'hash-wasm'
 import * as Twofish from 'twofish-ts'
@@ -55,6 +58,9 @@ export function buildCdnUrl(repo: string, path: string, version = 'master'): str
 const moduleCache: Record<string, unknown> = {
   vue: Vue,
   bcryptjs,
+  dompurify: DOMPurify,
+  marked: Marked,
+  jsbarcode: JsBarcode,
   'crypto-js': CryptoJS,
   'hash-wasm': HashWasm,
   'twofish-ts': Twofish,

@@ -10,7 +10,7 @@
 [![Vue 3](https://img.shields.io/badge/Vue-3-42b883?logo=vue.js&logoColor=white)](https://vuejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
-[![Release](https://img.shields.io/badge/Release-v1.5.2-success)](https://github.com/k3vi-07/supertools/releases/tag/v1.5.2)
+[![Release](https://img.shields.io/badge/Release-v1.5.3-success)](https://github.com/k3vi-07/supertools/releases/tag/v1.5.3)
 [![Tools](https://img.shields.io/badge/Built--in_Tools-136-7c3aed)](#-内置工具136-个)
 [![Remote Plugins](https://img.shields.io/badge/Remote_Plugins-134-0f766e)](https://github.com/k3vi-07/supertools-community)
 [![Website](https://img.shields.io/badge/Website-supertools.app-d4943e?style=flat)](https://k3vi-07.github.io/supertools/)
@@ -37,7 +37,7 @@
 
 ## 🚀 快速开始
 
-当前稳定版：**v1.5.2**。可前往 [GitHub Releases](https://github.com/k3vi-07/supertools/releases/latest) 下载 macOS、Windows 或 Linux 安装包。
+当前源码版本：**v1.5.3**（发布前验证中）。可前往 [GitHub Releases](https://github.com/k3vi-07/supertools/releases/latest) 下载 macOS、Windows 或 Linux 安装包。
 
 ### 环境要求
 
@@ -80,7 +80,12 @@ xattr -cr /Applications/SuperTools.app
 
 > ad-hoc 签名用于保证安装包及自动更新过程中的 bundle 完整性，不等同于 Apple Developer ID 签名或公证。
 
-## 🆕 v1.5.2 更新
+## 🆕 v1.5.3 更新
+
+- 远程插件新增 DOMPurify、Marked、JsBarcode 受信模块，支持社区 v1.9.1 的安全 HTML 处理与标准条形码生成。
+- 为正则测试器允许独立 Blob Worker，支持匹配超时终止。
+
+## v1.5.2 更新
 
 - 修复 Windows 远程组件缓存键可越过缓存目录的路径安全问题，并新增回归测试。
 - 恢复 Electron Chromium 沙盒，缩减远程工具窗口的 preload 能力暴露面。

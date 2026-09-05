@@ -20,9 +20,10 @@ export function openRemoteToolWindow(toolId: string): BrowserWindow {
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
     const headers = { ...details.responseHeaders }
-    headers['Content-Security-Policy'] = [
+    headers['Content-Security-Policy'] = [[
       "default-src 'self'",
       "script-src 'self' 'unsafe-eval'",
+      "worker-src 'self' blob:",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
       "font-src 'self' data:",
@@ -31,7 +32,7 @@ export function openRemoteToolWindow(toolId: string): BrowserWindow {
       "object-src 'none'",
       "base-uri 'none'",
       "form-action 'none'"
-    ]
+    ].join('; ')]
     callback({ responseHeaders: headers })
   })
   win.webContents.on('will-navigate', (event, url) => {
